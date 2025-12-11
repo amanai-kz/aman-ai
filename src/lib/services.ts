@@ -124,18 +124,6 @@ export const services = [
     team: ["Samiullah", "Alnur"],
     status: "active" as const,
   },
-  // Rehabilitation
-  {
-    id: "rehabilitation",
-    title: "Реабилитация",
-    description: "Персонализированные программы восстановления",
-    longDescription: "YOLO и Computer Vision для отслеживания движений и персонализированной нейрореабилитации",
-    iconName: "Dumbbell",
-    href: "/dashboard/rehabilitation",
-    embedUrl: null,
-    team: ["Murat", "Adilet"],
-    status: "active" as const,
-  },
   // Library
   {
     id: "library",
