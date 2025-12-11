@@ -147,6 +147,18 @@ export const services = [
     team: ["Murat", "Adilet"],
     status: "active" as const,
   },
+  // Library
+  {
+    id: "library",
+    title: "Библиотека",
+    description: "Образовательные и релаксационные материалы",
+    longDescription: "Видео, аудио и статьи для обучения, релаксации и улучшения сна",
+    iconName: "BookOpen",
+    href: "/dashboard/library",
+    embedUrl: null,
+    team: ["Alnur"],
+    status: "active" as const,
+  },
 ]
 
 export type Service = typeof services[number]

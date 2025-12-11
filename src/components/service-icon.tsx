@@ -3,7 +3,7 @@
 import { 
   Scan, Activity, ClipboardList, Dna, Droplets, HeartPulse, Brain, Cpu, Eye,
   ScanLine, Radiation, BrainCircuit, FlaskConical, TestTube2, Waves, 
-  PersonStanding, Syringe, Dumbbell, Microscope, Stethoscope, Atom,
+  PersonStanding, Syringe, Dumbbell, Microscope, Stethoscope, Atom, BookOpen,
   LucideIcon 
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -30,6 +30,7 @@ const iconMap: Record<string, LucideIcon> = {
   Microscope,
   Stethoscope,
   Atom,
+  BookOpen,
 }
 
 interface ServiceIconProps {

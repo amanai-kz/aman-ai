@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { ServiceCard } from "@/components/service-card"
 import { DashboardBackground } from "@/components/dashboard-background"
+import { MoodCheck } from "@/components/mood-check"
 import { services } from "@/lib/services"
 import { 
   Activity, 
@@ -45,6 +46,9 @@ export default async function DashboardPage() {
         <DashboardBackground />
         
         <div className="relative z-10 p-6 md:p-8 lg:p-10">
+          {/* Mood Check */}
+          <MoodCheck />
+          
           {/* Welcome + Health Score Row */}
           <div className="grid lg:grid-cols-3 gap-6 mb-8">
             {/* Welcome Card */}
@@ -88,19 +92,21 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            {/* Health Score Card */}
+            {/* Neuro-Score Card */}
             <div className="border border-border rounded-2xl p-6 bg-background/60 backdrop-blur-sm">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-sm text-muted-foreground">Health Score</span>
-                <Shield className="w-4 h-4 text-emerald-500" />
+                <span className="text-sm text-muted-foreground">Neuro-Readiness Score</span>
+                <Brain className="w-4 h-4 text-emerald-500" />
               </div>
               <div className="flex items-end gap-3 mb-4">
                 <span className="text-5xl font-semibold tracking-tight text-emerald-500">78</span>
                 <span className="text-sm text-muted-foreground mb-2">/ 100</span>
               </div>
-              <p className="text-xs text-muted-foreground mb-4">
-                Хороший результат! Рекомендуем повторить через 2 недели
-              </p>
+              <div className="flex gap-4 text-xs text-muted-foreground mb-4">
+                <span>💤 Сон: 85%</span>
+                <span>💓 HRV: 72%</span>
+                <span>🧘 Стресс: 32%</span>
+              </div>
               <div className="h-2 bg-secondary rounded-full overflow-hidden">
                 <div className="h-full w-[78%] bg-emerald-500 rounded-full transition-all duration-500" />
               </div>

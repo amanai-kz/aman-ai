@@ -1,7 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, Scan, Activity, ClipboardList, Dna, Droplets, HeartPulse, LucideIcon } from "lucide-react"
+import { 
+  ArrowRight, Scan, Activity, ClipboardList, Dna, Droplets, HeartPulse,
+  Brain, ScanLine, Radiation, BrainCircuit, FlaskConical, TestTube2, 
+  Waves, PersonStanding, Syringe, Dumbbell, Atom, BookOpen,
+  LucideIcon 
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const iconMap: Record<string, LucideIcon> = {
@@ -11,6 +16,18 @@ const iconMap: Record<string, LucideIcon> = {
   Dna,
   Droplets,
   HeartPulse,
+  Brain,
+  ScanLine,
+  Radiation,
+  BrainCircuit,
+  FlaskConical,
+  TestTube2,
+  Waves,
+  PersonStanding,
+  Syringe,
+  Dumbbell,
+  Atom,
+  BookOpen,
 }
 
 interface ServiceCardProps {

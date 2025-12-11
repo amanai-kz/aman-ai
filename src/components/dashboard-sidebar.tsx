@@ -33,6 +33,7 @@ import {
   Syringe,
   Dumbbell,
   Atom,
+  BookOpen,
   LucideIcon,
 } from "lucide-react"
 
@@ -54,6 +55,7 @@ const iconMap: Record<string, LucideIcon> = {
   Syringe,
   Dumbbell,
   Atom,
+  BookOpen,
 }
 
 interface DashboardSidebarProps {
