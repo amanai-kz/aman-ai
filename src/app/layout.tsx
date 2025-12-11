@@ -8,9 +8,9 @@ const manrope = Manrope({ subsets: ["latin", "cyrillic"], variable: "--font-manr
 const jetBrainsMono = JetBrains_Mono({ subsets: ["latin", "cyrillic"], variable: "--font-mono" })
 
 export const metadata: Metadata = {
-  title: "Aman AI — AI платформа для нейродиагностики",
+  title: "Aman AI — AI Agent платформа для нейродиагностики",
   description:
-    "Объединяем передовые технологии искусственного интеллекта для комплексной диагностики неврологических заболеваний",
+    "AI Agent платформа для комплексной диагностики и реабилитации неврологических заболеваний",
   icons: {
     icon: [
       {

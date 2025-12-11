@@ -52,7 +52,7 @@ export default function LandingPage() {
               <div className="flex items-center gap-4 mb-12 opacity-0 animate-fade-up">
                 <div className="h-[1px] w-16 bg-foreground/15" />
                 <span className="font-mono text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
-                  AI-Powered Diagnostics
+                  AI Agent Platform
                 </span>
               </div>
 
@@ -65,7 +65,7 @@ export default function LandingPage() {
 
               {/* Subtitle with more space */}
               <p className="text-xl md:text-2xl text-muted-foreground font-light leading-relaxed max-w-xl mb-16 opacity-0 animate-fade-up stagger-2">
-                Платформа на основе искусственного интеллекта для точной диагностики неврологических заболеваний
+                AI Agent платформа для точной диагностики и реабилитации неврологических заболеваний
               </p>
 
               {/* CTA buttons */}
