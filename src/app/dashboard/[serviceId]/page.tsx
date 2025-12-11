@@ -74,7 +74,7 @@ export default async function ServicePage({
                   <ServiceIcon name={service.iconName} className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <h3 className="text-xl font-medium mb-3">
-                  {service.status === "coming" ? "Сервис в разработке" : "Сервис не подключен"}
+                  {(service.status as string) === "coming" ? "Сервис в разработке" : "Сервис не подключен"}
                 </h3>
                 <p className="text-muted-foreground mb-6">
                   {service.longDescription}
