@@ -63,7 +63,7 @@ export const services = [
     longDescription: "PPG, IMU, EMG сенсоры для мониторинга стресса и состояния нервной системы",
     iconName: "Waves",
     href: "/dashboard/iot",
-    embedUrl: "https://iotphoenix.kz/rehab",
+    embedUrl: "https://dev.amanai.com.kz",
     team: ["Mukhammedzhan"],
     status: "active" as const,
   },
