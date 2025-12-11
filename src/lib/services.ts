@@ -39,9 +39,9 @@ export const services = [
     longDescription: "AlphaFold и ESMFold для анализа генетических данных и прогнозирования структуры белков",
     iconName: "Dna",
     href: "/dashboard/genetics",
-    embedUrl: null, // URL сервиса от команды S4
+    embedUrl: null,
     team: ["Bekzat", "Kaisar"],
-    status: "coming" as const,
+    status: "active" as const,
   },
   {
     id: "blood",
@@ -50,9 +50,9 @@ export const services = [
     longDescription: "ML-анализ показателей крови для выявления биомаркеров нейродегенеративных заболеваний",
     iconName: "Droplets",
     href: "/dashboard/blood",
-    embedUrl: null, // URL сервиса от команды S5
+    embedUrl: null,
     team: ["Nursultan", "Damir"],
-    status: "coming" as const,
+    status: "active" as const,
   },
   {
     id: "rehabilitation",
