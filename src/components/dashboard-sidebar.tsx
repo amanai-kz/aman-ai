@@ -22,6 +22,17 @@ import {
   Dna,
   Droplets,
   HeartPulse,
+  Brain,
+  ScanLine,
+  Radiation,
+  BrainCircuit,
+  FlaskConical,
+  TestTube2,
+  Waves,
+  PersonStanding,
+  Syringe,
+  Dumbbell,
+  Atom,
   LucideIcon,
 } from "lucide-react"
 
@@ -32,6 +43,17 @@ const iconMap: Record<string, LucideIcon> = {
   Dna,
   Droplets,
   HeartPulse,
+  Brain,
+  ScanLine,
+  Radiation,
+  BrainCircuit,
+  FlaskConical,
+  TestTube2,
+  Waves,
+  PersonStanding,
+  Syringe,
+  Dumbbell,
+  Atom,
 }
 
 interface DashboardSidebarProps {

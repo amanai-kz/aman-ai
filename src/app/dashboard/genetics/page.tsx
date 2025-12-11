@@ -11,7 +11,10 @@ import {
   RefreshCw,
   Download,
   CheckCircle2,
-  Dna
+  Dna,
+  Upload,
+  FileText,
+  X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DashboardBackground } from '@/components/dashboard-background'
@@ -54,6 +57,37 @@ export default function GeneticsPage() {
   const [progress, setProgress] = useState(0)
   const [isRunning, setIsRunning] = useState(false)
   const [dnaSequence, setDnaSequence] = useState<string[]>([])
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setUploadedFile(file)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) {
+      setUploadedFile(file)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = () => {
+    setIsDragging(false)
+  }
+
+  const removeFile = () => {
+    setUploadedFile(null)
+  }
 
   // Generate DNA sequence animation
   useEffect(() => {
@@ -169,6 +203,60 @@ export default function GeneticsPage() {
             Комбинирует анализ ДНК и крови с использованием AI для выявления генетических рисков.
             Идентифицирует варианты, анализирует структуры белков и рассчитывает risk scores.
           </p>
+        </div>
+
+        {/* File Upload */}
+        <div className="animate-fade-up stagger-1">
+          <div 
+            className={`relative border-2 border-dashed rounded-2xl p-8 transition-all ${
+              isDragging 
+                ? 'border-primary bg-primary/5' 
+                : uploadedFile 
+                  ? 'border-emerald-500 bg-emerald-500/5' 
+                  : 'border-border hover:border-primary/50'
+            }`}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+          >
+            {uploadedFile ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-emerald-500/10 rounded-xl">
+                    <FileText className="w-6 h-6 text-emerald-500" />
+                  </div>
+                  <div>
+                    <p className="font-medium">{uploadedFile.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {(uploadedFile.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" onClick={removeFile}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center cursor-pointer">
+                <div className="p-4 bg-muted rounded-2xl mb-4">
+                  <Upload className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <p className="font-medium mb-1">Загрузить генетические данные</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  FASTA, VCF, или CSV файлы (до 50 MB)
+                </p>
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  accept=".fasta,.vcf,.csv,.txt"
+                  onChange={handleFileUpload}
+                />
+                <span className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+                  Выбрать файл
+                </span>
+              </label>
+            )}
+          </div>
         </div>
 
         {/* Controls */}

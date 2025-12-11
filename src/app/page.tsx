@@ -22,24 +22,36 @@ export default function LandingPage() {
               <div className="flex items-center gap-4 mb-12 opacity-0 animate-fade-up">
                 <div className="h-[1px] w-16 bg-foreground/15" />
                 <span className="font-mono text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
-                  AI Agent Platform
+                  Мультимодальная платформа
                 </span>
               </div>
 
               {/* Main headline - larger with more contrast */}
-              <h1 className="text-[clamp(3rem,8vw,7rem)] font-medium tracking-[-0.03em] leading-[0.9] mb-16 opacity-0 animate-fade-up stagger-1">
-                <span className="block">Будущее</span>
-                <span className="block text-muted-foreground/40">медицинской</span>
-                <span className="block">диагностики</span>
+              <h1 className="text-[clamp(2.5rem,7vw,5.5rem)] font-medium tracking-[-0.03em] leading-[0.95] mb-12 opacity-0 animate-fade-up stagger-1">
+                <span className="block">Нейро-диагностика</span>
+                <span className="block text-muted-foreground/40">и реабилитация</span>
               </h1>
 
+              {/* Disease tags */}
+              <div className="flex flex-wrap gap-3 mb-10 opacity-0 animate-fade-up stagger-2">
+                <span className="px-4 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-full text-sm font-medium">
+                  Рак головного мозга
+                </span>
+                <span className="px-4 py-2 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-full text-sm font-medium">
+                  Опухоли мозга
+                </span>
+                <span className="px-4 py-2 bg-purple-500/10 text-purple-500 border border-purple-500/20 rounded-full text-sm font-medium">
+                  Нейродегенеративные заболевания
+                </span>
+              </div>
+
               {/* Subtitle with more space */}
-              <p className="text-xl md:text-2xl text-muted-foreground font-light leading-relaxed max-w-xl mb-16 opacity-0 animate-fade-up stagger-2">
-                AI Agent платформа для точной диагностики и реабилитации неврологических заболеваний
+              <p className="text-xl md:text-2xl text-muted-foreground font-light leading-relaxed max-w-xl mb-16 opacity-0 animate-fade-up stagger-3">
+                AI-платформа для ранней диагностики, мониторинга и персонализированной реабилитации пациентов
               </p>
 
               {/* CTA buttons */}
-              <div className="flex flex-wrap items-center gap-6 opacity-0 animate-fade-up stagger-3">
+              <div className="flex flex-wrap items-center gap-6 opacity-0 animate-fade-up stagger-4">
                 <Button size="lg" className="rounded-full px-10 h-14 text-base font-medium group" asChild>
                   <Link href="/login">
                     Начать работу

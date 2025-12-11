@@ -6,22 +6,24 @@ const prisma = new PrismaClient()
 async function main() {
   console.log("🌱 Seeding database...")
 
-  // Пароль для всех тестовых аккаунтов: test123
-  const password = await hash("test123", 12)
+  // Пароли для тестовых аккаунтов
+  const patientPassword = await hash("Aibek2024!", 12)
+  const doctorPassword = await hash("Daulet2024!", 12)
+  const adminPassword = await hash("Admin2024!", 12)
 
   // 1. Тестовый пациент
   const patient = await prisma.user.upsert({
-    where: { email: "patient@test.com" },
+    where: { email: "aibek@amanai.kz" },
     update: {},
     create: {
-      email: "patient@test.com",
-      name: "Тест Пациент",
-      password,
+      email: "aibek@amanai.kz",
+      name: "Айбек Сериков",
+      password: patientPassword,
       role: "PATIENT",
       patient: {
         create: {
           gender: "MALE",
-          bloodType: "A+",
+          bloodType: "B+",
         },
       },
     },
@@ -30,12 +32,12 @@ async function main() {
 
   // 2. Тестовый врач
   const doctor = await prisma.user.upsert({
-    where: { email: "doctor@test.com" },
+    where: { email: "daulet@amanai.kz" },
     update: {},
     create: {
-      email: "doctor@test.com",
-      name: "Доктор Тестов",
-      password,
+      email: "daulet@amanai.kz",
+      name: "Дәулет Қасымов",
+      password: doctorPassword,
       role: "DOCTOR",
       doctor: {
         create: {
@@ -49,12 +51,12 @@ async function main() {
 
   // 3. Тестовый админ
   const admin = await prisma.user.upsert({
-    where: { email: "admin@test.com" },
+    where: { email: "admin@amanai.kz" },
     update: {},
     create: {
-      email: "admin@test.com",
-      name: "Администратор",
-      password,
+      email: "admin@amanai.kz",
+      name: "Нұрлан Әбдірахманов",
+      password: adminPassword,
       role: "ADMIN",
     },
   })
@@ -63,10 +65,10 @@ async function main() {
   console.log("")
   console.log("🎉 Seeding complete!")
   console.log("")
-  console.log("📋 Test accounts (password: test123):")
-  console.log("   - patient@test.com  (Пациент)")
-  console.log("   - doctor@test.com   (Врач)")
-  console.log("   - admin@test.com    (Админ)")
+  console.log("📋 Test accounts:")
+  console.log("   - aibek@amanai.kz   / Aibek2024!  (Пациент)")
+  console.log("   - daulet@amanai.kz  / Daulet2024! (Врач)")
+  console.log("   - admin@amanai.kz   / Admin2024!  (Админ)")
 }
 
 main()
