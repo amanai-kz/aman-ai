@@ -1,40 +1,8 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { Mic, MicOff, Volume2, Loader2, MessageSquare } from "lucide-react"
+import { useState, useRef } from "react"
+import { Mic, MicOff, Volume2, Loader2, MessageSquare, Square } from "lucide-react"
 import { DashboardBackground } from "@/components/dashboard-background"
-
-// Web Speech API types
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string
-}
-
-interface SpeechRecognitionInstance extends EventTarget {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  start: () => void
-  stop: () => void
-  onstart: (() => void) | null
-  onresult: ((event: SpeechRecognitionEvent) => void) | null
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
-  onend: (() => void) | null
-}
-
-interface SpeechRecognitionConstructor {
-  new (): SpeechRecognitionInstance
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: SpeechRecognitionConstructor
-    webkitSpeechRecognition: SpeechRecognitionConstructor
-  }
-}
 
 export default function VoiceAssistantPage() {
   const [isRecording, setIsRecording] = useState(false)
@@ -42,136 +10,125 @@ export default function VoiceAssistantPage() {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [messages, setMessages] = useState<Array<{ role: "user" | "ai"; text: string }>>([])
   const [error, setError] = useState("")
-  const [isSupported, setIsSupported] = useState(true)
 
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-      if (!SpeechRecognition) {
-        setIsSupported(false)
-        setError("Браузер не поддерживает распознавание речи. Используйте Chrome или Edge.")
-      }
-    }
-  }, [])
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
 
   const startRecording = async () => {
-    console.log("startRecording called")
+    console.log("Starting recording...")
     setError("")
     
-    // First request microphone permission
     try {
-      console.log("Requesting microphone permission...")
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      console.log("Microphone permission granted")
-      // Stop the stream immediately, we just needed permission
-      stream.getTracks().forEach(track => track.stop())
-    } catch (err) {
-      console.error("Microphone permission denied:", err)
-      setError("Доступ к микрофону запрещён. Разрешите в настройках браузера.")
-      return
-    }
-    
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    console.log("SpeechRecognition available:", !!SpeechRecognition)
-    
-    if (!SpeechRecognition) {
-      setError("Браузер не поддерживает распознавание речи")
-      return
-    }
-
-    try {
-      const recognition = new SpeechRecognition()
-      console.log("Recognition created")
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          channelCount: 1,
+          sampleRate: 48000,
+        } 
+      })
+      console.log("Got media stream")
       
-      // Try Russian first (better support), fallback to auto-detect
-      recognition.lang = "ru-RU"
-      recognition.continuous = true
-      recognition.interimResults = true
-
-      // @ts-expect-error - these events exist but not in types
-      recognition.onaudiostart = () => console.log("Audio capture started")
-      // @ts-expect-error
-      recognition.onaudioend = () => console.log("Audio capture ended")
-      // @ts-expect-error
-      recognition.onsoundstart = () => console.log("Sound detected")
-      // @ts-expect-error
-      recognition.onsoundend = () => console.log("Sound ended")
-      // @ts-expect-error  
-      recognition.onspeechstart = () => console.log("Speech detected")
-      // @ts-expect-error
-      recognition.onspeechend = () => console.log("Speech ended")
-
-      recognition.onstart = () => {
-        console.log("Recognition started")
-        setIsRecording(true)
+      // Try to use OGG Opus format for Yandex
+      let mimeType = "audio/webm;codecs=opus"
+      if (MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")) {
+        mimeType = "audio/ogg;codecs=opus"
       }
+      console.log("Using MIME type:", mimeType)
+      
+      const mediaRecorder = new MediaRecorder(stream, { mimeType })
+      
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
 
-      recognition.onresult = async (event: SpeechRecognitionEvent) => {
-        console.log("Recognition result:", event.results[0][0].transcript)
-        const transcript = event.results[0][0].transcript
-        setIsRecording(false)
-        
-        if (transcript) {
-          setMessages(prev => [...prev, { role: "user", text: transcript }])
-          await processWithAI(transcript)
+      mediaRecorder.ondataavailable = (event) => {
+        console.log("Data available:", event.data.size, "bytes")
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
         }
       }
 
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error("Speech recognition error:", event.error)
-        setIsRecording(false)
-        if (event.error === 'no-speech') {
-          setError("Речь не обнаружена. Попробуйте ещё раз.")
-        } else if (event.error === 'not-allowed') {
-          setError("Доступ к микрофону запрещён.")
-        } else {
-          setError(`Ошибка: ${event.error}`)
-        }
+      mediaRecorder.onstop = async () => {
+        console.log("Recording stopped, processing audio...")
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
+        console.log("Audio blob size:", audioBlob.size)
+        stream.getTracks().forEach(track => track.stop())
+        await processAudio(audioBlob)
       }
 
-      recognition.onend = () => {
-        console.log("Recognition ended")
-        setIsRecording(false)
-      }
-
-      recognitionRef.current = recognition
-      console.log("Calling recognition.start()")
-      recognition.start()
-      console.log("recognition.start() called")
+      mediaRecorder.start()
+      setIsRecording(true)
+      console.log("Recording started")
     } catch (err) {
-      console.error("Error in startRecording:", err)
-      setError("Ошибка запуска распознавания")
+      console.error("Error starting recording:", err)
+      setError("Микрофонға қол жеткізу мүмкін емес / Не удалось получить доступ к микрофону")
     }
   }
 
   const stopRecording = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop()
+    console.log("Stopping recording...")
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
     }
-    setIsRecording(false)
   }
 
-  const processWithAI = async (text: string) => {
+  const processAudio = async (audioBlob: Blob) => {
     setIsProcessing(true)
+    console.log("Processing audio, size:", audioBlob.size)
+
     try {
-      const response = await fetch("/api/chat", {
+      // 1. Speech to Text via Yandex
+      const formData = new FormData()
+      formData.append("audio", audioBlob, "recording.ogg")
+
+      console.log("Sending to STT API...")
+      const sttResponse = await fetch("/api/speech/stt", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: formData,
       })
 
-      if (!response.ok) throw new Error("AI error")
+      console.log("STT response status:", sttResponse.status)
       
-      const data = await response.json()
-      const aiResponse = data.response || data.message || "Кешіріңіз, жауап ала алмадым."
-      
+      if (!sttResponse.ok) {
+        const errText = await sttResponse.text()
+        console.error("STT error:", errText)
+        throw new Error("Speech recognition failed")
+      }
+
+      const sttData = await sttResponse.json()
+      console.log("STT result:", sttData)
+      const recognizedText = sttData.text
+
+      if (!recognizedText) {
+        setError("Сөйлеу танылмады. Қайталап көріңіз. / Речь не распознана.")
+        setIsProcessing(false)
+        return
+      }
+
+      setMessages(prev => [...prev, { role: "user", text: recognizedText }])
+
+      // 2. Get AI response
+      console.log("Sending to AI...")
+      const chatResponse = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: recognizedText }),
+      })
+
+      if (!chatResponse.ok) {
+        throw new Error("Chat API failed")
+      }
+
+      const chatData = await chatResponse.json()
+      const aiResponse = chatData.response || chatData.message || "Кешіріңіз, жауап ала алмадым."
+      console.log("AI response:", aiResponse)
+
       setMessages(prev => [...prev, { role: "ai", text: aiResponse }])
+
+      // 3. Text to Speech (browser-based for now)
       speakResponse(aiResponse)
     } catch (err) {
-      console.error("AI error:", err)
-      setError("AI өңдеу қатесі")
+      console.error("Processing error:", err)
+      setError("Өңдеу қатесі. Қайталап көріңіз. / Ошибка обработки.")
     } finally {
       setIsProcessing(false)
     }
@@ -180,14 +137,11 @@ export default function VoiceAssistantPage() {
   const speakResponse = (text: string) => {
     if ('speechSynthesis' in window) {
       setIsSpeaking(true)
-      
       const utterance = new SpeechSynthesisUtterance(text)
-      utterance.lang = "kk-KZ"
+      utterance.lang = "ru-RU"
       utterance.rate = 0.9
-      
       utterance.onend = () => setIsSpeaking(false)
       utterance.onerror = () => setIsSpeaking(false)
-      
       window.speechSynthesis.speak(utterance)
     }
   }
@@ -199,18 +153,6 @@ export default function VoiceAssistantPage() {
     }
   }
 
-  if (!isSupported) {
-    return (
-      <div className="min-h-screen relative">
-        <DashboardBackground />
-        <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-8">
-          <div className="text-red-400 text-xl mb-4">⚠️ Браузер не поддерживает голосовой ввод</div>
-          <p className="text-gray-400">Используйте Google Chrome или Microsoft Edge</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen relative">
       <DashboardBackground />
@@ -219,7 +161,7 @@ export default function VoiceAssistantPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">🎤 Дауыстық көмекші / Голосовой ассистент</h1>
           <p className="text-muted-foreground">
-            Қазақша немесе орысша сөйлеңіз — AI жауап береді
+            Қазақша немесе орысша сөйлеңіз — AI жауап береді (Yandex SpeechKit)
           </p>
         </div>
 
@@ -231,7 +173,7 @@ export default function VoiceAssistantPage() {
                 {isRecording && (
                   <div className="flex items-center gap-2 text-red-500 animate-pulse">
                     <div className="w-3 h-3 rounded-full bg-red-500" />
-                    <span className="text-lg font-medium">Тыңдаймын... / Слушаю...</span>
+                    <span className="text-lg font-medium">Жазылуда... / Запись...</span>
                   </div>
                 )}
                 {isProcessing && (
@@ -266,11 +208,11 @@ export default function VoiceAssistantPage() {
                   onClick={stopRecording}
                   className="w-32 h-32 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white flex items-center justify-center shadow-2xl animate-pulse relative z-50 cursor-pointer"
                 >
-                  <MicOff className="w-12 h-12" />
+                  <Square className="w-10 h-10" />
                 </button>
               ) : (
                 <button
-                  onClick={() => { console.log("Button clicked!"); startRecording(); }}
+                  onClick={startRecording}
                   disabled={isProcessing}
                   className="w-32 h-32 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-2xl hover:shadow-emerald-500/50 hover:scale-105 transition-all duration-300 disabled:opacity-50 relative z-50 cursor-pointer"
                 >
@@ -289,7 +231,7 @@ export default function VoiceAssistantPage() {
               )}
 
               <p className="mt-8 text-sm text-muted-foreground text-center max-w-sm">
-                💡 Используйте Chrome или Edge для лучшего распознавания
+                💡 Нажмите для записи, говорите, нажмите снова для остановки
               </p>
             </div>
           </div>
@@ -333,7 +275,7 @@ export default function VoiceAssistantPage() {
           <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-4 text-center">
             <div className="text-2xl mb-2">🇰🇿</div>
             <h3 className="font-medium">Қазақ тілі</h3>
-            <p className="text-sm text-muted-foreground">Web Speech API</p>
+            <p className="text-sm text-muted-foreground">Yandex SpeechKit</p>
           </div>
           <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-4 text-center">
             <div className="text-2xl mb-2">🇷🇺</div>
@@ -343,7 +285,7 @@ export default function VoiceAssistantPage() {
           <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-4 text-center">
             <div className="text-2xl mb-2">🧠</div>
             <h3 className="font-medium">AI Assistant</h3>
-            <p className="text-sm text-muted-foreground">Powered by Llama 3.1</p>
+            <p className="text-sm text-muted-foreground">Llama 3.1 + Groq</p>
           </div>
         </div>
       </div>
