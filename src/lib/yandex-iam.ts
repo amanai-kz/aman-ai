@@ -23,7 +23,7 @@ function createJWT(): string {
   
   const payload = {
     iss: SERVICE_ACCOUNT_ID,
-    aud: 'https://iam.api.cloud.yandex.net/iam/v1/tokens',
+    aud: 'https://iam.api.cloud.yandexcloud.kz/iam/v1/tokens', // Kazakhstan region
     iat: now,
     exp: now + 3600 // 1 hour
   }
@@ -64,7 +64,8 @@ export async function getIAMToken(): Promise<string> {
   
   const jwt = createJWT()
   
-  const response = await fetch('https://iam.api.cloud.yandex.net/iam/v1/tokens', {
+  // Kazakhstan region IAM endpoint
+  const response = await fetch('https://iam.api.cloud.yandexcloud.kz/iam/v1/tokens', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
