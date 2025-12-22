@@ -30,9 +30,9 @@ export async function POST(req: NextRequest) {
     const audioBase64 = Buffer.from(audioBuffer).toString('base64')
 
     // Yandex SpeechKit v3 REST API for Kazakhstan - async recognition
-    // Using transcribation (long audio) endpoint which supports REST
+    // Using Kazakhstan transcription endpoint
     const response = await fetch(
-      "https://transcribe.api.cloud.yandex.net/speech/stt/v2/longRunningRecognize",
+      "https://transcribe.api.yandexcloud.kz/speech/stt/v2/longRunningRecognize",
       {
         method: "POST",
         headers: {
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       
       // Try alternative endpoint for Kazakhstan
       const altResponse = await fetch(
-        "https://stt.api.ml.yandexcloud.kz/speech/stt/v2/longRunningRecognize",
+        "https://stt.api.yandexcloud.kz/speech/stt/v2/longRunningRecognize",
         {
           method: "POST",
           headers: {
@@ -125,7 +125,7 @@ async function handleAsyncRecognition(operationData: { id?: string; done?: boole
       await new Promise(resolve => setTimeout(resolve, 1000))
       
       const statusResponse = await fetch(
-        `https://operation.api.cloud.yandex.net/operations/${operationId}`,
+        `https://operation.api.yandexcloud.kz/operations/${operationId}`,
         {
           headers: {
             "Authorization": `Bearer ${iamToken}`,
