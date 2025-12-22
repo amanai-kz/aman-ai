@@ -20,12 +20,12 @@ export async function POST(req: NextRequest) {
 
     // Yandex SpeechKit STT API
     const response = await fetch(
-      `https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?folderId=${YANDEX_FOLDER_ID}&lang=kk-KZ`,
+      `https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?folderId=${YANDEX_FOLDER_ID}&lang=kk-KZ&format=oggopus`,
       {
         method: "POST",
         headers: {
           "Authorization": `Api-Key ${YANDEX_API_KEY}`,
-          "Content-Type": "audio/webm",
+          "Content-Type": "audio/ogg",
         },
         body: audioBuffer,
       }
