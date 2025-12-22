@@ -111,7 +111,9 @@ export default function VoiceAssistantPage() {
       const chatResponse = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: recognizedText }),
+        body: JSON.stringify({ 
+          messages: [{ role: "user", content: recognizedText }] 
+        }),
       })
 
       if (!chatResponse.ok) {
@@ -119,7 +121,7 @@ export default function VoiceAssistantPage() {
       }
 
       const chatData = await chatResponse.json()
-      const aiResponse = chatData.response || chatData.message || "Кешіріңіз, жауап ала алмадым."
+      const aiResponse = chatData.message || chatData.response || "Кешіріңіз, жауап ала алмадым."
       console.log("AI response:", aiResponse)
 
       setMessages(prev => [...prev, { role: "ai", text: aiResponse }])
