@@ -17,8 +17,25 @@ export default function VoiceAssistantPage() {
   const [error, setError] = useState("")
   const [volumeLevel, setVolumeLevel] = useState(0)
   const [micPermission, setMicPermission] = useState<"granted" | "denied" | "prompt">("prompt")
+  const [user, setUser] = useState<{ id: string; name: string; email: string } | null>(null)
 
   const vapiRef = useRef<Vapi | null>(null)
+
+  // Fetch current user
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch("/api/user/me")
+        if (res.ok) {
+          const data = await res.json()
+          setUser(data)
+        }
+      } catch (err) {
+        console.error("Failed to fetch user:", err)
+      }
+    }
+    fetchUser()
+  }, [])
 
   // Check microphone permission on mount
   useEffect(() => {
@@ -149,7 +166,14 @@ export default function VoiceAssistantPage() {
     try {
       console.log("📞 Starting VAPI call with assistant:", VAPI_ASSISTANT_ID)
       
-      await vapiRef.current.start(VAPI_ASSISTANT_ID)
+      // Pass user data as metadata for the report
+      await vapiRef.current.start(VAPI_ASSISTANT_ID, {
+        metadata: {
+          userId: user?.id || "",
+          userName: user?.name || "Анонимный пациент",
+          userEmail: user?.email || "",
+        }
+      })
       
       console.log("✅ VAPI call started successfully")
     } catch (err: unknown) {

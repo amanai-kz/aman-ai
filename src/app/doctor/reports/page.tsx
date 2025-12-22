@@ -25,6 +25,8 @@ interface VoiceReport {
   id: string
   vapiCallId: string
   callDuration: number | null
+  patientId: string | null
+  patientName: string | null
   title: string
   summary: string
   generalWellbeing: number | null
@@ -224,13 +226,15 @@ export default function DoctorReportsPage() {
                               </span>
                             </div>
                             <p className="text-sm font-medium">
-                              {new Date(report.createdAt).toLocaleDateString("kk-KZ", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric"
-                              })}
+                              {report.patientName || "Анонимный"}
                             </p>
                             <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                              <span>
+                                {new Date(report.createdAt).toLocaleDateString("kk-KZ", {
+                                  day: "numeric",
+                                  month: "short"
+                                })}
+                              </span>
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
                                 {formatDuration(report.callDuration)}
@@ -272,15 +276,15 @@ export default function DoctorReportsPage() {
                             )}
                           </div>
                           <h2 className="text-xl font-bold">
+                            {selectedReport.patientName || "Анонимный пациент"}
+                          </h2>
+                          <p className="text-sm text-muted-foreground mt-1">
                             {new Date(selectedReport.createdAt).toLocaleDateString("kk-KZ", {
                               weekday: "long",
                               day: "numeric",
                               month: "long",
                               year: "numeric"
-                            })}
-                          </h2>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Сөйлесу ұзақтығы: {formatDuration(selectedReport.callDuration)}
+                            })} • Ұзақтығы: {formatDuration(selectedReport.callDuration)}
                           </p>
                         </div>
                         

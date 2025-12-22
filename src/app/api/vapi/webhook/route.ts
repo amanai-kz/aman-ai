@@ -70,6 +70,11 @@ interface VapiWebhookPayload {
       status: string
       startedAt?: string
       endedAt?: string
+      metadata?: {
+        userId?: string
+        userName?: string
+        userEmail?: string
+      }
     }
     artifact?: {
       messages?: VapiMessage[]
@@ -159,23 +164,29 @@ export async function POST(req: NextRequest) {
         )
       }
       
+      // Extract patient info from metadata
+      const patientId = call.metadata?.userId || null
+      const patientName = call.metadata?.userName || "Анонимный пациент"
+      
       // Create report in database using raw SQL
       const reportId = randomUUID()
       await pool.query(`
         INSERT INTO voice_reports (
-          id, vapi_call_id, call_duration, title, summary,
+          id, vapi_call_id, call_duration, patient_id, patient_name, title, summary,
           general_wellbeing, sleep_quality, sleep_hours, mood_state,
           stress_level, stress_sources, physical_symptoms, cognitive_issues,
           social_connections, risk_level, ai_insights, recommendations,
           requires_followup, urgent_attention, language, created_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW()
         )
       `, [
         reportId,
         call.id,
         callDuration,
-        `Денсаулық есебі / Отчёт здоровья - ${new Date().toLocaleDateString("kk-KZ")}`,
+        patientId,
+        patientName,
+        `Денсаулық есебі - ${patientName} - ${new Date().toLocaleDateString("kk-KZ")}`,
         reportText,
         structuredData.generalWellbeing,
         structuredData.sleepQuality,

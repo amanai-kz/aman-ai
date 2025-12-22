@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
         id,
         vapi_call_id as "vapiCallId",
         call_duration as "callDuration",
+        patient_id as "patientId",
+        patient_name as "patientName",
         title,
         summary,
         general_wellbeing as "generalWellbeing",
