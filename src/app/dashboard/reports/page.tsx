@@ -66,58 +66,59 @@ export default function ReportsPage() {
     }
   }
 
-  const downloadPDF = async (report: VoiceReport) => {
-    const { jsPDF } = await import("jspdf")
-    
-    const doc = new jsPDF()
-    const pageWidth = doc.internal.pageSize.getWidth()
-    
-    // Header
-    doc.setFontSize(20)
-    doc.setTextColor(0, 128, 128)
-    doc.text("AMAN AI", pageWidth / 2, 20, { align: "center" })
-    
-    doc.setFontSize(12)
-    doc.setTextColor(100)
-    doc.text("Health Assessment Report", pageWidth / 2, 28, { align: "center" })
-    
-    doc.setDrawColor(0, 128, 128)
-    doc.line(20, 35, pageWidth - 20, 35)
-    
-    doc.setFontSize(10)
-    doc.setTextColor(0)
-    
+  const downloadReport = (report: VoiceReport) => {
     const date = new Date(report.createdAt).toLocaleString("kk-KZ")
-    doc.text(`Күні / Дата: ${date}`, 20, 45)
-    doc.text(`Ұзақтығы / Длительность: ${report.callDuration ? Math.round(report.callDuration / 60) + " мин" : "—"}`, 20, 52)
-    doc.text(`Қауіп деңгейі / Уровень риска: ${report.riskLevel || "LOW"}`, 20, 59)
     
-    doc.setFontSize(14)
-    doc.setTextColor(0, 100, 100)
-    doc.text("Есеп / Отчёт", 20, 75)
+    const content = `
+═══════════════════════════════════════════════════════════
+                        AMAN AI
+              Денсаулық бағалау есебі
+              Health Assessment Report
+═══════════════════════════════════════════════════════════
+
+Күні / Дата: ${date}
+Ұзақтығы / Длительность: ${report.callDuration ? Math.round(report.callDuration / 60) + " мин" : "—"}
+Қауіп деңгейі / Уровень риска: ${report.riskLevel || "LOW"}
+
+───────────────────────────────────────────────────────────
+                    КӨРСЕТКІШТЕР / ПОКАЗАТЕЛИ
+───────────────────────────────────────────────────────────
+
+Жалпы жағдай / Общее состояние: ${report.generalWellbeing || "—"}/10
+Ұйқы сапасы / Качество сна: ${report.sleepQuality || "—"}
+Көңіл-күй / Настроение: ${report.moodState || "—"}
+Стресс деңгейі / Уровень стресса: ${report.stressLevel || "—"}
+
+───────────────────────────────────────────────────────────
+                      ЕСЕП / ОТЧЁТ
+───────────────────────────────────────────────────────────
+
+${report.summary}
+
+───────────────────────────────────────────────────────────
+
+⚠️ Бұл есеп AI арқылы жасалған. 
+   Толық диагноз үшін дәрігерге хабарласыңыз.
+
+   Этот отчёт сгенерирован AI. 
+   Для полной диагностики обратитесь к врачу.
+
+═══════════════════════════════════════════════════════════
+                  AMAN AI Platform
+                    amanai.kz
+═══════════════════════════════════════════════════════════
+`
     
-    doc.setFontSize(10)
-    doc.setTextColor(0)
-    
-    const summaryLines = doc.splitTextToSize(report.summary, pageWidth - 40)
-    doc.text(summaryLines, 20, 85)
-    
-    doc.setFontSize(8)
-    doc.setTextColor(150)
-    doc.text(
-      "Бұл есеп AI арқылы жасалған. Дәрігермен кеңесу ұсынылады.",
-      pageWidth / 2, 
-      doc.internal.pageSize.getHeight() - 20,
-      { align: "center" }
-    )
-    doc.text(
-      "AMAN AI Platform - amanai.kz",
-      pageWidth / 2, 
-      doc.internal.pageSize.getHeight() - 12,
-      { align: "center" }
-    )
-    
-    doc.save(`AMAN_AI_Report_${new Date(report.createdAt).toISOString().split("T")[0]}.pdf`)
+    // Download as text file
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `AMAN_AI_Report_${new Date(report.createdAt).toISOString().split("T")[0]}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const getRiskColor = (level: string | null) => {
@@ -273,11 +274,11 @@ export default function ReportsPage() {
                       
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => downloadPDF(selectedReport)}
+                          onClick={() => downloadReport(selectedReport)}
                           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition-colors font-medium"
                         >
-                          <Download className="w-4 h-4" />
-                          PDF жүктеу
+<Download className="w-4 h-4" />
+                        Жүктеу
                         </button>
                         <button
                           onClick={() => deleteReport(selectedReport.id)}

@@ -195,7 +195,7 @@ export default function VoiceAssistantPage() {
           )}
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6">
+        <div className="max-w-2xl mx-auto">
           {/* Voice Control */}
           <div className="bg-background/60 backdrop-blur-sm rounded-2xl border p-8">
             <div className="flex flex-col items-center justify-center min-h-[400px]">
@@ -301,54 +301,6 @@ export default function VoiceAssistantPage() {
                   Нажмите зелёную кнопку, разрешите микрофон и говорите.
                 </span>
               </p>
-            </div>
-          </div>
-
-          {/* Live Chat History */}
-          <div className="bg-background/60 backdrop-blur-sm rounded-2xl border p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <MessageSquare className="w-5 h-5 text-emerald-500" />
-              <h2 className="font-semibold">Сөйлесу / Разговор</h2>
-              {isConnected && (
-                <span className="ml-auto px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-500 text-xs flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Live
-                </span>
-              )}
-            </div>
-
-            <div className="space-y-4 max-h-[500px] overflow-y-auto">
-              {messages.length === 0 ? (
-                <div className="text-center text-muted-foreground py-12">
-                  <Phone className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                  <p>Сөйлесу басталғанда мұнда көрінеді</p>
-                  <p className="text-sm">Здесь появится диалог</p>
-                </div>
-              ) : (
-                messages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-4 rounded-xl transition-all duration-300 ${
-                      msg.role === "user"
-                        ? "bg-blue-500/10 ml-8 border border-blue-500/20"
-                        : "bg-emerald-500/10 mr-8 border border-emerald-500/20"
-                    }`}
-                  >
-                    <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                      {msg.role === "user" ? (
-                        <>
-                          <Mic className="w-3 h-3" /> Сіз / Вы
-                        </>
-                      ) : (
-                        <>
-                          <Volume2 className="w-3 h-3" /> AI Ассистент
-                        </>
-                      )}
-                    </p>
-                    <p className="text-sm">{msg.text}</p>
-                  </div>
-                ))
-              )}
             </div>
           </div>
         </div>
