@@ -136,6 +136,18 @@ export const services = [
     team: ["Alnur"],
     status: "active" as const,
   },
+  // Voice Assistant
+  {
+    id: "voice",
+    title: "Дауыстық көмекші",
+    description: "Голосовой AI-ассистент на казахском и русском",
+    longDescription: "Говорите с AI на казахском или русском языке. Распознавание речи и голосовые ответы.",
+    iconName: "Mic",
+    href: "/dashboard/voice",
+    embedUrl: null,
+    team: ["Alnur"],
+    status: "active" as const,
+  },
 ]
 
 export type Service = typeof services[number]
