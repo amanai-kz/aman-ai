@@ -66,59 +66,38 @@ export default function ReportsPage() {
     }
   }
 
-  const downloadReport = (report: VoiceReport) => {
-    const date = new Date(report.createdAt).toLocaleString("kk-KZ")
+  const downloadPDF = async () => {
+    if (!selectedReport) return
     
-    const content = `
-═══════════════════════════════════════════════════════════
-                        AMAN AI
-              Денсаулық бағалау есебі
-              Health Assessment Report
-═══════════════════════════════════════════════════════════
+    const reportElement = document.getElementById("report-content")
+    if (!reportElement) return
 
-Күні / Дата: ${date}
-Ұзақтығы / Длительность: ${report.callDuration ? Math.round(report.callDuration / 60) + " мин" : "—"}
-Қауіп деңгейі / Уровень риска: ${report.riskLevel || "LOW"}
-
-───────────────────────────────────────────────────────────
-                    КӨРСЕТКІШТЕР / ПОКАЗАТЕЛИ
-───────────────────────────────────────────────────────────
-
-Жалпы жағдай / Общее состояние: ${report.generalWellbeing || "—"}/10
-Ұйқы сапасы / Качество сна: ${report.sleepQuality || "—"}
-Көңіл-күй / Настроение: ${report.moodState || "—"}
-Стресс деңгейі / Уровень стресса: ${report.stressLevel || "—"}
-
-───────────────────────────────────────────────────────────
-                      ЕСЕП / ОТЧЁТ
-───────────────────────────────────────────────────────────
-
-${report.summary}
-
-───────────────────────────────────────────────────────────
-
-⚠️ Бұл есеп AI арқылы жасалған. 
-   Толық диагноз үшін дәрігерге хабарласыңыз.
-
-   Этот отчёт сгенерирован AI. 
-   Для полной диагностики обратитесь к врачу.
-
-═══════════════════════════════════════════════════════════
-                  AMAN AI Platform
-                    amanai.kz
-═══════════════════════════════════════════════════════════
-`
-    
-    // Download as text file
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `AMAN_AI_Report_${new Date(report.createdAt).toISOString().split("T")[0]}.txt`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    try {
+      const html2canvas = (await import("html2canvas")).default
+      const { jsPDF } = await import("jspdf")
+      
+      const canvas = await html2canvas(reportElement, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff"
+      })
+      
+      const imgData = canvas.toDataURL("image/png")
+      const pdf = new jsPDF("p", "mm", "a4")
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = canvas.width
+      const imgHeight = canvas.height
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight)
+      const imgX = (pdfWidth - imgWidth * ratio) / 2
+      const imgY = 10
+      
+      pdf.addImage(imgData, "PNG", imgX, imgY, imgWidth * ratio, imgHeight * ratio)
+      pdf.save(`AMAN_AI_Report_${new Date(selectedReport.createdAt).toISOString().split("T")[0]}.pdf`)
+    } catch (err) {
+      console.error("PDF generation failed:", err)
+    }
   }
 
   const getRiskColor = (level: string | null) => {
@@ -254,7 +233,7 @@ ${report.summary}
             {/* Report Detail */}
             <div className="lg:col-span-2">
               {selectedReport ? (
-                <div className="bg-background/60 backdrop-blur-sm rounded-2xl border overflow-hidden">
+                <div id="report-content" className="bg-white dark:bg-gray-900 rounded-2xl border overflow-hidden">
                   {/* Header */}
                   <div className="p-6 border-b bg-gradient-to-r from-emerald-500/5 to-teal-500/5">
                     <div className="flex items-start justify-between">
@@ -287,7 +266,7 @@ ${report.summary}
                       
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => downloadReport(selectedReport)}
+                          onClick={downloadPDF}
                           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition-colors font-medium"
                         >
 <Download className="w-4 h-4" />
