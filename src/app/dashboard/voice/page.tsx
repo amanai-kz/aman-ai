@@ -215,22 +215,22 @@ export default function VoiceAssistantPage() {
               {isSpeaking ? (
                 <button
                   onClick={stopSpeaking}
-                  className="w-32 h-32 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-2xl hover:shadow-amber-500/50 transition-all duration-300"
+                  className="w-32 h-32 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-2xl hover:shadow-amber-500/50 transition-all duration-300 relative z-50 cursor-pointer"
                 >
                   <Volume2 className="w-12 h-12 animate-pulse" />
                 </button>
               ) : isRecording ? (
                 <button
                   onClick={stopRecording}
-                  className="w-32 h-32 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white flex items-center justify-center shadow-2xl animate-pulse"
+                  className="w-32 h-32 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white flex items-center justify-center shadow-2xl animate-pulse relative z-50 cursor-pointer"
                 >
                   <MicOff className="w-12 h-12" />
                 </button>
               ) : (
                 <button
-                  onClick={startRecording}
+                  onClick={() => { console.log("Button clicked!"); startRecording(); }}
                   disabled={isProcessing}
-                  className="w-32 h-32 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-2xl hover:shadow-emerald-500/50 hover:scale-105 transition-all duration-300 disabled:opacity-50"
+                  className="w-32 h-32 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-2xl hover:shadow-emerald-500/50 hover:scale-105 transition-all duration-300 disabled:opacity-50 relative z-50 cursor-pointer"
                 >
                   {isProcessing ? (
                     <Loader2 className="w-12 h-12 animate-spin" />
