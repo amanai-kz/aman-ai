@@ -85,7 +85,8 @@ export default function VoiceAssistantPage() {
       const recognition = new SpeechRecognition()
       console.log("Recognition created")
       
-      recognition.lang = "kk-KZ"
+      // Try Russian first (better support), fallback to auto-detect
+      recognition.lang = "ru-RU"
       recognition.continuous = false
       recognition.interimResults = false
 
