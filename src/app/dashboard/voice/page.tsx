@@ -136,15 +136,48 @@ export default function VoiceAssistantPage() {
     }
   }
 
-  const speakResponse = (text: string) => {
+  const speakResponse = async (text: string) => {
+    setIsSpeaking(true)
+    
+    try {
+      // Try Yandex TTS first
+      const response = await fetch("/api/speech/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, lang: "ru-RU" }),
+      })
+      
+      if (response.ok) {
+        const audioBlob = await response.blob()
+        const audioUrl = URL.createObjectURL(audioBlob)
+        const audio = new Audio(audioUrl)
+        audio.onended = () => {
+          setIsSpeaking(false)
+          URL.revokeObjectURL(audioUrl)
+        }
+        audio.onerror = () => {
+          setIsSpeaking(false)
+          URL.revokeObjectURL(audioUrl)
+        }
+        await audio.play()
+        return
+      }
+      
+      console.log("Yandex TTS failed, falling back to browser TTS")
+    } catch (err) {
+      console.error("TTS error:", err)
+    }
+    
+    // Fallback to browser TTS
     if ('speechSynthesis' in window) {
-      setIsSpeaking(true)
       const utterance = new SpeechSynthesisUtterance(text)
       utterance.lang = "ru-RU"
       utterance.rate = 0.9
       utterance.onend = () => setIsSpeaking(false)
       utterance.onerror = () => setIsSpeaking(false)
       window.speechSynthesis.speak(utterance)
+    } else {
+      setIsSpeaking(false)
     }
   }
 
