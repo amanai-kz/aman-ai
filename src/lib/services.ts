@@ -148,6 +148,18 @@ export const services = [
     team: ["Alnur"],
     status: "active" as const,
   },
+  // Health Reports
+  {
+    id: "reports",
+    title: "Есептер / Отчёты",
+    description: "AI-сөйлесуден жасалған денсаулық есептері",
+    longDescription: "Голосовой ассистентпен сөйлесуден автоматты түрде жасалған медициналық есептер",
+    iconName: "FileText",
+    href: "/dashboard/reports",
+    embedUrl: null,
+    team: ["Alnur"],
+    status: "active" as const,
+  },
 ]
 
 export type Service = typeof services[number]

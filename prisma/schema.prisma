@@ -101,6 +101,7 @@ model Patient {
   iotSessions IotSession[]
   questionnaires QuestionnaireResult[]
   reports     HealthReport[]
+  voiceReports VoiceReport[]
   assignedDoctors DoctorPatient[]
 
   @@map("patients")
@@ -303,6 +304,55 @@ model HealthReport {
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
 
   @@map("health_reports")
+}
+
+// ============================================
+// VOICE ASSESSMENT REPORTS (AI-generated from VAPI)
+// ============================================
+
+model VoiceReport {
+  id              String   @id @default(cuid())
+  
+  // VAPI Call Info (не сохраняем сам диалог!)
+  vapiCallId      String   @unique
+  callDuration    Int?     // seconds
+  
+  // Patient info (может быть анонимный)
+  patientId       String?
+  patientName     String?
+  
+  // AI-Generated Report Content
+  title           String   // "Есеп / Отчёт от 22.12.2024"
+  summary         String   @db.Text  // Краткое резюме состояния
+  
+  // Structured Assessment Data
+  generalWellbeing    Int?      // 1-10
+  sleepQuality        String?   // жақсы/орташа/нашар
+  sleepHours          Float?
+  moodState           String?   // көңілді/бейтарап/мұңды/мазасыз
+  stressLevel         String?   // төмен/орташа/жоғары
+  stressSources       String[]  // жұмыс, отбасы, etc.
+  physicalSymptoms    String[]  // бас ауруы, шаршау, etc.
+  cognitiveIssues     String[]  // концентрация, жады, etc.
+  socialConnections   String?   // жиі/сирек/жоқ
+  
+  // AI Analysis
+  riskLevel           String?   // LOW, MODERATE, HIGH, CRITICAL
+  aiInsights          String[]  // AI-generated insights
+  recommendations     String[]  // AI recommendations
+  
+  // Flags
+  requiresFollowup    Boolean   @default(false)
+  urgentAttention     Boolean   @default(false)
+  
+  // Metadata
+  language            String    @default("kk") // kk, ru
+  createdAt           DateTime  @default(now())
+  
+  // Relations
+  patient             Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@map("voice_reports")
 }
 
 // ============================================
