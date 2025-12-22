@@ -2,7 +2,8 @@ import * as crypto from 'crypto'
 
 const SERVICE_ACCOUNT_ID = process.env.YANDEX_SERVICE_ACCOUNT_ID || ""
 const KEY_ID = process.env.YANDEX_KEY_ID || ""
-const PRIVATE_KEY = process.env.YANDEX_PRIVATE_KEY || ""
+// Handle escaped newlines in private key from env
+const PRIVATE_KEY = (process.env.YANDEX_PRIVATE_KEY || "").replace(/\\n/g, '\n')
 
 let cachedToken: { token: string; expiresAt: number } | null = null
 
@@ -51,8 +52,16 @@ export async function getIAMToken(): Promise<string> {
   }
   
   if (!SERVICE_ACCOUNT_ID || !KEY_ID || !PRIVATE_KEY) {
+    console.error('Missing Yandex credentials:', {
+      hasServiceAccountId: !!SERVICE_ACCOUNT_ID,
+      hasKeyId: !!KEY_ID,
+      hasPrivateKey: !!PRIVATE_KEY,
+      privateKeyStart: PRIVATE_KEY.substring(0, 50)
+    })
     throw new Error('Yandex credentials not configured')
   }
+  
+  console.log('Generating JWT for service account:', SERVICE_ACCOUNT_ID)
   
   const jwt = createJWT()
   
