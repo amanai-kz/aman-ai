@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { 
   FileText, Download, Trash2, AlertTriangle, Clock, 
   Heart, Moon, Brain, Activity, ChevronRight, Loader2,
@@ -178,18 +178,17 @@ function getSectionStyle(type: SummarySection["type"]): { bg: string } {
   return styles[type]
 }
 
-function getSectionIcon(type: SummarySection["type"]) {
-  const icons: Record<SummarySection["type"], JSX.Element> = {
-    general: <Activity className="w-5 h-5 text-blue-400" />,
-    sleep: <Moon className="w-5 h-5 text-indigo-400" />,
-    mood: <Heart className="w-5 h-5 text-pink-400" />,
-    stress: <Zap className="w-5 h-5 text-orange-400" />,
-    symptoms: <Brain className="w-5 h-5 text-red-400" />,
-    conclusion: <CheckCircle2 className="w-5 h-5 text-emerald-400" />,
-    recommendations: <FileText className="w-5 h-5 text-amber-400" />,
-    other: <FileText className="w-5 h-5 text-slate-400" />,
+function getSectionIcon(type: SummarySection["type"]): React.ReactNode {
+  switch (type) {
+    case "general": return <Activity className="w-5 h-5 text-blue-400" />
+    case "sleep": return <Moon className="w-5 h-5 text-indigo-400" />
+    case "mood": return <Heart className="w-5 h-5 text-pink-400" />
+    case "stress": return <Zap className="w-5 h-5 text-orange-400" />
+    case "symptoms": return <Brain className="w-5 h-5 text-red-400" />
+    case "conclusion": return <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+    case "recommendations": return <FileText className="w-5 h-5 text-amber-400" />
+    default: return <FileText className="w-5 h-5 text-slate-400" />
   }
-  return icons[type]
 }
 
 type TabType = "consultations" | "voice"
