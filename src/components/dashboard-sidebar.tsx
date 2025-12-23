@@ -34,6 +34,8 @@ import {
   Dumbbell,
   Atom,
   BookOpen,
+  AudioLines,
+  Mic,
   LucideIcon,
 } from "lucide-react"
 
@@ -56,6 +58,9 @@ const iconMap: Record<string, LucideIcon> = {
   Dumbbell,
   Atom,
   BookOpen,
+  AudioLines,
+  Mic,
+  FileText,
 }
 
 interface DashboardSidebarProps {
@@ -77,7 +82,6 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
       icon: iconMap[s.iconName] || Scan,
     })),
     { name: "История", href: "/dashboard/history", icon: History },
-    { name: "Отчёты", href: "/dashboard/reports", icon: FileText },
   ]
 
   const doctorNav = [

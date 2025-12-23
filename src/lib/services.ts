@@ -148,6 +148,18 @@ export const services = [
     team: ["Alnur"],
     status: "active" as const,
   },
+  // Consultation Recording
+  {
+    id: "consultation",
+    title: "Запись консультации",
+    description: "Запись и анализ разговора врача с пациентом",
+    longDescription: "Записывайте консультации — AI расшифрует диалог, разделит врача и пациента, создаст структурированное заключение",
+    iconName: "AudioLines",
+    href: "/dashboard/consultation",
+    embedUrl: null,
+    team: ["Alnur"],
+    status: "active" as const,
+  },
   // Health Reports
   {
     id: "reports",

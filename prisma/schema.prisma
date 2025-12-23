@@ -102,6 +102,7 @@ model Patient {
   questionnaires QuestionnaireResult[]
   reports     HealthReport[]
   voiceReports VoiceReport[]
+  consultationReports ConsultationReport[]
   assignedDoctors DoctorPatient[]
 
   @@map("patients")
@@ -353,6 +354,44 @@ model VoiceReport {
   patient             Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
 
   @@map("voice_reports")
+}
+
+// ============================================
+// CONSULTATION REPORTS (AI-analyzed doctor-patient conversations)
+// ============================================
+
+model ConsultationReport {
+  id                String   @id @default(cuid())
+  
+  // Patient info
+  patientId         String?
+  patientName       String?
+  
+  // Recording info
+  recordingDuration Int?     // seconds
+  
+  // AI-Analyzed Content
+  title             String   // "Консультация от 23.12.2024"
+  
+  // Structured data from AI analysis
+  generalCondition  String?  @db.Text  // Общее состояние
+  sleep             String?  @db.Text  // Сон
+  mood              String?  @db.Text  // Настроение
+  stress            String?  @db.Text  // Стресс
+  physicalSymptoms  String?  @db.Text  // Физические симптомы
+  conclusion        String?  @db.Text  // Заключение врача
+  recommendations   String?  @db.Text  // Рекомендации
+  
+  // Raw dialogue
+  rawDialogue       String?  @db.Text  // Полная расшифровка
+  
+  // Metadata
+  createdAt         DateTime @default(now())
+  
+  // Relations
+  patient           Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@map("consultation_reports")
 }
 
 // ============================================
