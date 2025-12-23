@@ -21,7 +21,10 @@ import {
 import { DashboardBackground } from "@/components/dashboard-background"
 import { cn } from "@/lib/utils"
 
-const WS_URL = "ws://89.218.178.215:8001/ws/analyze"
+// WebSocket URL - через nginx прокси для HTTPS совместимости
+const WS_URL = typeof window !== "undefined" 
+  ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/analyze`
+  : "ws://localhost:8001/ws/analyze"
 
 interface AnalysisResult {
   status: string
