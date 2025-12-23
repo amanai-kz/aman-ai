@@ -146,47 +146,51 @@ export default function ReportsPage() {
     
     const content = `
 ═══════════════════════════════════════════════════════════════
-                    AMAN AI - ОТЧЁТ КОНСУЛЬТАЦИИ
+                    AMAN AI - КОНСУЛЬТАЦИЯ ЕСЕБІ
 ═══════════════════════════════════════════════════════════════
 
-ДАТА: ${new Date(selectedConsultation.createdAt).toLocaleString("ru-RU")}
-ДЛИТЕЛЬНОСТЬ: ${selectedConsultation.recordingDuration ? Math.round(selectedConsultation.recordingDuration / 60) + " мин" : "—"}
-ПАЦИЕНТ: ${selectedConsultation.patientName || "—"}
+КҮНІ / ДАТА: ${new Date(selectedConsultation.createdAt).toLocaleString("ru-RU")}
+${selectedConsultation.patientName ? `ПАЦИЕНТ: ${selectedConsultation.patientName}` : ""}
 
 ───────────────────────────────────────────────────────────────
-                         ЗАКЛЮЧЕНИЕ
+              ҚОРЫТЫНДЫ / ЗАКЛЮЧЕНИЕ
 ───────────────────────────────────────────────────────────────
 
 ${selectedConsultation.conclusion || "—"}
 
 ───────────────────────────────────────────────────────────────
-                    ОСНОВНЫЕ ПОКАЗАТЕЛИ
+              НЕГІЗГІ КӨРСЕТКІШТЕР / ОСНОВНЫЕ ПОКАЗАТЕЛИ
 ───────────────────────────────────────────────────────────────
 
-• Общее состояние: ${selectedConsultation.generalCondition || "—"}
+• Жалпы жағдай / Общее состояние:
+${selectedConsultation.generalCondition || "—"}
 
-• Сон: ${selectedConsultation.sleep || "—"}
+• Ұйқы / Сон:
+${selectedConsultation.sleep || "—"}
 
-• Настроение: ${selectedConsultation.mood || "—"}
+• Көңіл-күй / Настроение:
+${selectedConsultation.mood || "—"}
 
-• Стресс: ${selectedConsultation.stress || "—"}
+• Стресс деңгейі / Уровень стресса:
+${selectedConsultation.stress || "—"}
 
-• Физические симптомы: ${selectedConsultation.physicalSymptoms || "—"}
+• Физикалық симптомдар / Физические симптомы:
+${selectedConsultation.physicalSymptoms || "—"}
 
 ───────────────────────────────────────────────────────────────
-                       РЕКОМЕНДАЦИИ
+              ҰСЫНЫСТАР / РЕКОМЕНДАЦИИ
 ───────────────────────────────────────────────────────────────
 
 ${selectedConsultation.recommendations || "—"}
 
 ───────────────────────────────────────────────────────────────
-                   РАСШИФРОВКА ДИАЛОГА
+              ДИАЛОГ ЖАЗБАСЫ / РАСШИФРОВКА ДИАЛОГА
 ───────────────────────────────────────────────────────────────
 
 ${selectedConsultation.rawDialogue || "—"}
 
 ───────────────────────────────────────────────────────────────
-Отчёт сгенерирован AI • AMAN AI Platform • amanai.kz
+Есеп AI арқылы жасалды • AMAN AI Platform • amanai.kz
 ═══════════════════════════════════════════════════════════════
     `.trim()
 
@@ -311,9 +315,8 @@ ${selectedConsultation.rawDialogue || "—"}
                                 year: "numeric"
                               })}
                             </p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-2">
-                              <Clock className="w-3 h-3" />
-                              {formatDuration(report.recordingDuration)}
+                            <p className="text-xs text-muted-foreground truncate">
+                              {report.conclusion ? report.conclusion.substring(0, 40) + (report.conclusion.length > 40 ? "..." : "") : "Консультация"}
                             </p>
                           </div>
                           <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -332,6 +335,9 @@ ${selectedConsultation.rawDialogue || "—"}
                     <div className="bg-background/60 backdrop-blur-sm rounded-2xl border p-6">
                       <div className="flex items-start justify-between">
                         <div>
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 mb-3">
+                            Консультация
+                          </span>
                           <h2 className="text-xl font-bold">
                             {new Date(selectedConsultation.createdAt).toLocaleDateString("ru-RU", {
                               weekday: "long",
@@ -340,10 +346,11 @@ ${selectedConsultation.rawDialogue || "—"}
                               year: "numeric"
                             })}
                           </h2>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Длительность: {formatDuration(selectedConsultation.recordingDuration)}
-                            {selectedConsultation.patientName && ` • ${selectedConsultation.patientName}`}
-                          </p>
+                          {selectedConsultation.patientName && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Пациент: {selectedConsultation.patientName}
+                            </p>
+                          )}
                         </div>
                         
                         <div className="flex items-center gap-2">
@@ -372,71 +379,86 @@ ${selectedConsultation.rawDialogue || "—"}
                           <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
                             <Stethoscope className="w-5 h-5 text-emerald-500" />
                           </div>
-                          <h3 className="text-lg font-semibold">Заключение</h3>
+                          <h3 className="text-lg font-semibold">Қорытынды / Заключение</h3>
                         </div>
-                        <p className="text-emerald-400 font-medium">{selectedConsultation.conclusion}</p>
+                        <p className="text-emerald-400 font-medium text-lg">{selectedConsultation.conclusion}</p>
                       </div>
                     )}
 
                     {/* Info Cards */}
                     <div className="grid md:grid-cols-2 gap-4">
                       {selectedConsultation.generalCondition && (
-                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
+                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 hover:border-blue-500/30 transition-colors">
                           <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                              <Activity className="w-4 h-4 text-blue-400" />
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center">
+                              <Activity className="w-5 h-5 text-blue-400" />
                             </div>
-                            <h4 className="font-medium">Общее состояние</h4>
+                            <div>
+                              <h4 className="font-semibold">Жалпы жағдай</h4>
+                              <p className="text-xs text-muted-foreground">Общее состояние</p>
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground">{selectedConsultation.generalCondition}</p>
+                          <p className="text-sm leading-relaxed">{selectedConsultation.generalCondition}</p>
                         </div>
                       )}
                       
                       {selectedConsultation.sleep && (
-                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
+                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 hover:border-indigo-500/30 transition-colors">
                           <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-                              <Moon className="w-4 h-4 text-indigo-400" />
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center">
+                              <Moon className="w-5 h-5 text-indigo-400" />
                             </div>
-                            <h4 className="font-medium">Сон</h4>
+                            <div>
+                              <h4 className="font-semibold">Ұйқы</h4>
+                              <p className="text-xs text-muted-foreground">Сон</p>
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground">{selectedConsultation.sleep}</p>
+                          <p className="text-sm leading-relaxed">{selectedConsultation.sleep}</p>
                         </div>
                       )}
                       
                       {selectedConsultation.mood && (
-                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
+                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 hover:border-pink-500/30 transition-colors">
                           <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 rounded-lg bg-pink-500/20 flex items-center justify-center">
-                              <Heart className="w-4 h-4 text-pink-400" />
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500/20 to-rose-500/20 flex items-center justify-center">
+                              <Heart className="w-5 h-5 text-pink-400" />
                             </div>
-                            <h4 className="font-medium">Настроение</h4>
+                            <div>
+                              <h4 className="font-semibold">Көңіл-күй</h4>
+                              <p className="text-xs text-muted-foreground">Настроение</p>
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground">{selectedConsultation.mood}</p>
+                          <p className="text-sm leading-relaxed">{selectedConsultation.mood}</p>
                         </div>
                       )}
                       
                       {selectedConsultation.stress && (
-                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
+                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 hover:border-orange-500/30 transition-colors">
                           <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
-                              <Zap className="w-4 h-4 text-orange-400" />
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 flex items-center justify-center">
+                              <Zap className="w-5 h-5 text-orange-400" />
                             </div>
-                            <h4 className="font-medium">Стресс</h4>
+                            <div>
+                              <h4 className="font-semibold">Стресс деңгейі</h4>
+                              <p className="text-xs text-muted-foreground">Уровень стресса</p>
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground">{selectedConsultation.stress}</p>
+                          <p className="text-sm leading-relaxed">{selectedConsultation.stress}</p>
                         </div>
                       )}
                       
                       {selectedConsultation.physicalSymptoms && (
-                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 md:col-span-2">
+                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 md:col-span-2 hover:border-red-500/30 transition-colors">
                           <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center">
-                              <Brain className="w-4 h-4 text-red-400" />
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-rose-500/20 flex items-center justify-center">
+                              <Brain className="w-5 h-5 text-red-400" />
                             </div>
-                            <h4 className="font-medium">Физические симптомы</h4>
+                            <div>
+                              <h4 className="font-semibold">Физикалық симптомдар</h4>
+                              <p className="text-xs text-muted-foreground">Физические симптомы</p>
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground">{selectedConsultation.physicalSymptoms}</p>
+                          <p className="text-sm leading-relaxed">{selectedConsultation.physicalSymptoms}</p>
                         </div>
                       )}
                     </div>
@@ -448,9 +470,12 @@ ${selectedConsultation.rawDialogue || "—"}
                           <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
                             <FileText className="w-5 h-5 text-amber-500" />
                           </div>
-                          <h3 className="text-lg font-semibold">Рекомендации</h3>
+                          <div>
+                            <h3 className="text-lg font-semibold">Ұсыныстар</h3>
+                            <p className="text-xs text-muted-foreground">Рекомендации</p>
+                          </div>
                         </div>
-                        <p className="text-muted-foreground">{selectedConsultation.recommendations}</p>
+                        <p className="leading-relaxed">{selectedConsultation.recommendations}</p>
                       </div>
                     )}
 
@@ -459,9 +484,12 @@ ${selectedConsultation.rawDialogue || "—"}
                       <div className="bg-background/60 backdrop-blur-sm rounded-2xl border p-6">
                         <div className="flex items-center gap-3 mb-6">
                           <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                            <Clock className="w-5 h-5 text-purple-400" />
+                            <AudioLines className="w-5 h-5 text-purple-400" />
                           </div>
-                          <h3 className="text-lg font-semibold">Расшифровка диалога</h3>
+                          <div>
+                            <h3 className="text-lg font-semibold">Диалог жазбасы</h3>
+                            <p className="text-xs text-muted-foreground">Расшифровка диалога</p>
+                          </div>
                         </div>
                         
                         <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
