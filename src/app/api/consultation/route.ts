@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     let patientId = null
     if (session.user.role === "PATIENT") {
       const patientResult = await pool.query(
-        `SELECT id FROM patients WHERE user_id = $1`,
+        `SELECT id FROM patients WHERE "userId" = $1`,
         [session.user.id]
       )
       if (patientResult.rows.length > 0) {
@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
     // If patient, only show their reports
     if (session.user.role === "PATIENT") {
       const patientResult = await pool.query(
-        `SELECT id FROM patients WHERE user_id = $1`,
+        `SELECT id FROM patients WHERE "userId" = $1`,
         [session.user.id]
       )
       if (patientResult.rows.length > 0) {
