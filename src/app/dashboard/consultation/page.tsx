@@ -12,10 +12,12 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  Save
+  Save,
+  Download
 } from "lucide-react"
 import { DashboardBackground } from "@/components/dashboard-background"
 import { cn } from "@/lib/utils"
+import { generateConsultationPdf } from "@/lib/pdf-generator"
 
 // WebSocket URL - через nginx прокси для HTTPS совместимости
 const WS_URL = typeof window !== "undefined" 
@@ -61,6 +63,8 @@ export default function ConsultationPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
   const [finalRecordingTime, setFinalRecordingTime] = useState(0)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfError, setPdfError] = useState("")
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -84,6 +88,11 @@ export default function ConsultationPage() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    setPdfError("")
+    setPdfLoading(false)
+  }, [result])
 
   const startRecording = async () => {
     try {
@@ -182,6 +191,39 @@ export default function ConsultationPage() {
     }
   }
 
+  const downloadPdf = async () => {
+    if (!result?.result) return
+    setPdfError("")
+    setPdfLoading(true)
+
+    try {
+      const blob = await generateConsultationPdf(
+        {
+          recordingDuration: finalRecordingTime,
+          generalCondition: result.result.generalCondition,
+          dialogueProtocol: result.result.dialogueProtocol,
+          recommendations: result.result.recommendations,
+          conclusion: result.result.conclusion,
+          createdAt: new Date(),
+        },
+        { brandName: "AMAN AI" }
+      )
+
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      const datePart = new Date().toISOString().split("T")[0]
+      link.href = url
+      link.download = `Consultation_preview_${datePart}.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error("Error generating consultation PDF:", err)
+      setPdfError("PDF генерациясы сәтсіз аяқталды. Кейінірек қайталап көріңіз.")
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
   const sendAudioToServer = useCallback(async (audioBlob: Blob) => {
     try {
       setWsStatus("connecting")
@@ -244,6 +286,13 @@ export default function ConsultationPage() {
   const dialogueLines = result?.result?.dialogueProtocol 
     ? parseDialogue(result.result.dialogueProtocol) 
     : []
+  const hasResultContent = !!(
+    result?.result?.conclusion ||
+    result?.result?.generalCondition ||
+    result?.result?.recommendations ||
+    result?.result?.dialogueProtocol
+  )
+  const isPdfDisabled = !hasResultContent || pdfLoading
 
   return (
     <div className="min-h-screen relative">
@@ -448,6 +497,23 @@ export default function ConsultationPage() {
                   </div>
                 )}
                 <button
+                  onClick={downloadPdf}
+                  disabled={isPdfDisabled}
+                  className="px-6 py-3 rounded-xl border border-emerald-500 text-emerald-500 hover:bg-emerald-500/10 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {pdfLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      PDF...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5" />
+                      Скачать PDF
+                    </>
+                  )}
+                </button>
+                <button
                   onClick={() => {
                     setResult(null)
                     setRecordingTime(0)
@@ -458,6 +524,9 @@ export default function ConsultationPage() {
                   Начать новую запись
                 </button>
               </div>
+              {pdfError && (
+                <p className="text-sm text-red-500 text-center mt-2">{pdfError}</p>
+              )}
             </div>
           )}
         </div>
@@ -486,4 +555,3 @@ export default function ConsultationPage() {
     </div>
   )
 }
-
