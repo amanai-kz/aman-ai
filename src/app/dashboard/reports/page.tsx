@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from "react"
 import { 
-  FileText, Download, Trash2, AlertTriangle, Clock, 
-  Heart, Moon, Brain, Activity, ChevronRight, Loader2,
-  Stethoscope, CheckCircle2, User, Zap, AudioLines, Phone
+  FileText, Download, Trash2, AlertTriangle, 
+  Activity, ChevronRight, Loader2,
+  Stethoscope, CheckCircle2, User, AudioLines, Phone
 } from "lucide-react"
 import { DashboardBackground } from "@/components/dashboard-background"
 import { cn } from "@/lib/utils"
@@ -15,10 +15,6 @@ interface VoiceReport {
   callDuration: number | null
   title: string
   summary: string
-  generalWellbeing: number | null
-  sleepQuality: string | null
-  moodState: string | null
-  stressLevel: string | null
   riskLevel: string | null
   requiresFollowup: boolean
   urgentAttention: boolean
@@ -31,13 +27,9 @@ interface ConsultationReport {
   recordingDuration: number | null
   title: string
   generalCondition: string | null
-  sleep: string | null
-  mood: string | null
-  stress: string | null
-  physicalSymptoms: string | null
+  dialogueProtocol: string | null
   conclusion: string | null
   recommendations: string | null
-  rawDialogue: string | null
   createdAt: string
 }
 
@@ -46,8 +38,8 @@ interface DialogueLine {
   text: string
 }
 
-function parseDialogue(rawDialogue: string): DialogueLine[] {
-  const lines = rawDialogue.split("\n").filter(line => line.trim())
+function parseDialogue(dialogueProtocol: string): DialogueLine[] {
+  const lines = dialogueProtocol.split("\n").filter(line => line.trim())
   return lines.map(line => {
     const isDoctor = line.startsWith("SPEAKER_00:")
     const text = line.replace(/^SPEAKER_0[01]:\s*/, "").trim()
@@ -59,98 +51,74 @@ function parseDialogue(rawDialogue: string): DialogueLine[] {
 }
 
 interface SummarySection {
-  type: "general" | "sleep" | "mood" | "stress" | "symptoms" | "conclusion" | "recommendations" | "other"
+  type: "general" | "conclusion" | "recommendations" | "other"
   title: string
   content: string
 }
 
 function parseSummary(summary: string): SummarySection[] {
   if (!summary) return []
-  
+
   const sections: SummarySection[] = []
-  
-  // Common section patterns in reports
+
   const sectionPatterns = [
-    { pattern: /(?:жалпы жағдай|общее состояние|general condition)[:\s]*/gi, type: "general" as const, title: "Жалпы жағдай / Общее состояние" },
-    { pattern: /(?:ұйқы|сон|sleep)[:\s]*/gi, type: "sleep" as const, title: "Ұйқы / Сон" },
-    { pattern: /(?:көңіл-күй|настроение|mood)[:\s]*/gi, type: "mood" as const, title: "Көңіл-күй / Настроение" },
-    { pattern: /(?:стресс|stress)[:\s]*/gi, type: "stress" as const, title: "Стресс / Уровень стресса" },
-    { pattern: /(?:симптом|symptom|белгі)[:\s]*/gi, type: "symptoms" as const, title: "Симптомдар / Симптомы" },
-    { pattern: /(?:қорытынды|заключение|conclusion|резюме|summary)[:\s]*/gi, type: "conclusion" as const, title: "Қорытынды / Заключение" },
-    { pattern: /(?:ұсыныс|рекоменд|recommendation)[:\s]*/gi, type: "recommendations" as const, title: "Ұсыныстар / Рекомендации" },
+    { pattern: /general condition/i, type: "general" as const, title: "General condition" },
+    { pattern: /conclusion|summary/i, type: "conclusion" as const, title: "Conclusion" },
+    { pattern: /recommendation/i, type: "recommendations" as const, title: "Recommendations" },
   ]
-  
-  // Try to split by numbered sections (1. 2. 3. etc) or bullet points
+
   const numberedPattern = /(?:^|\n)(?:\d+[\.\)]\s*|[-•]\s*)/g
   const hasBullets = numberedPattern.test(summary)
-  
+
   if (hasBullets) {
-    // Split by numbered items or bullets
     const items = summary.split(/(?:^|\n)(?:\d+[\.\)]\s*|[-•]\s*)/).filter(item => item.trim())
-    
-    items.forEach(item => {
+    for (const item of items) {
       const trimmedItem = item.trim()
       let matched = false
-      
       for (const { pattern, type, title } of sectionPatterns) {
         if (pattern.test(trimmedItem)) {
           const content = trimmedItem.replace(pattern, "").trim()
-          if (content) {
-            sections.push({ type, title, content })
-            matched = true
-          }
+          if (content) sections.push({ type, title, content })
+          matched = true
           break
         }
       }
-      
       if (!matched && trimmedItem) {
-        // Check if it's a recommendation-like item
-        if (/рекоменд|ұсын|совет|follow|need|should/i.test(trimmedItem)) {
-          sections.push({ type: "recommendations", title: "Ұсыныстар / Рекомендации", content: trimmedItem })
+        if (/follow|need|should/i.test(trimmedItem)) {
+          sections.push({ type: "recommendations", title: "Recommendations", content: trimmedItem })
         } else {
-          sections.push({ type: "other", title: "Ақпарат / Информация", content: trimmedItem })
+          sections.push({ type: "other", title: "Other", content: trimmedItem })
         }
       }
-    })
+    }
   } else {
-    // Try to split by line breaks and look for section headers
     const lines = summary.split(/\n+/).filter(line => line.trim())
     let currentSection: SummarySection | null = null
-    
-    lines.forEach(line => {
+    for (const line of lines) {
       const trimmedLine = line.trim()
       let foundHeader = false
-      
       for (const { pattern, type, title } of sectionPatterns) {
         if (pattern.test(trimmedLine)) {
-          if (currentSection) {
-            sections.push(currentSection)
-          }
+          if (currentSection) sections.push(currentSection)
           const content = trimmedLine.replace(pattern, "").trim()
           currentSection = { type, title, content }
           foundHeader = true
           break
         }
       }
-      
       if (!foundHeader && currentSection) {
         currentSection.content += "\n" + trimmedLine
       } else if (!foundHeader && !currentSection) {
-        currentSection = { type: "conclusion", title: "Қорытынды / Заключение", content: trimmedLine }
+        currentSection = { type: "conclusion", title: "Conclusion", content: trimmedLine }
       }
-    })
-    
-    if (currentSection) {
-      sections.push(currentSection)
     }
+    if (currentSection) sections.push(currentSection)
   }
-  
-  // If we didn't find any structure, return the whole thing as one section
+
   if (sections.length === 0 && summary.trim()) {
-    return [{ type: "conclusion", title: "Қорытынды / Резюме", content: summary.trim() }]
+    return [{ type: "conclusion", title: "Conclusion", content: summary.trim() }]
   }
-  
-  // Merge sections with same type
+
   const merged: SummarySection[] = []
   sections.forEach(section => {
     const existing = merged.find(s => s.type === section.type)
@@ -160,17 +128,13 @@ function parseSummary(summary: string): SummarySection[] {
       merged.push({ ...section })
     }
   })
-  
+
   return merged
 }
 
 function getSectionStyle(type: SummarySection["type"]): { bg: string } {
   const styles: Record<SummarySection["type"], { bg: string }> = {
     general: { bg: "bg-gradient-to-br from-blue-500/20 to-cyan-500/20" },
-    sleep: { bg: "bg-gradient-to-br from-indigo-500/20 to-purple-500/20" },
-    mood: { bg: "bg-gradient-to-br from-pink-500/20 to-rose-500/20" },
-    stress: { bg: "bg-gradient-to-br from-orange-500/20 to-amber-500/20" },
-    symptoms: { bg: "bg-gradient-to-br from-red-500/20 to-rose-500/20" },
     conclusion: { bg: "bg-emerald-500/20" },
     recommendations: { bg: "bg-amber-500/20" },
     other: { bg: "bg-slate-500/20" },
@@ -181,10 +145,6 @@ function getSectionStyle(type: SummarySection["type"]): { bg: string } {
 function getSectionIcon(type: SummarySection["type"]): React.ReactNode {
   switch (type) {
     case "general": return <Activity className="w-5 h-5 text-blue-400" />
-    case "sleep": return <Moon className="w-5 h-5 text-indigo-400" />
-    case "mood": return <Heart className="w-5 h-5 text-pink-400" />
-    case "stress": return <Zap className="w-5 h-5 text-orange-400" />
-    case "symptoms": return <Brain className="w-5 h-5 text-red-400" />
     case "conclusion": return <CheckCircle2 className="w-5 h-5 text-emerald-400" />
     case "recommendations": return <FileText className="w-5 h-5 text-amber-400" />
     default: return <FileText className="w-5 h-5 text-slate-400" />
@@ -278,53 +238,40 @@ export default function ReportsPage() {
     const filename = `Consultation_${new Date(selectedConsultation.createdAt).toISOString().split("T")[0]}.txt`
     
     const content = `
-═══════════════════════════════════════════════════════════════
-                    AMAN AI - КОНСУЛЬТАЦИЯ ЕСЕБІ
-═══════════════════════════════════════════════════════════════
+????????????????????????????????????????????????????????????????
+                    AMAN AI - ???????????? ?????
+????????????????????????????????????????????????????????????????
 
-КҮНІ / ДАТА: ${new Date(selectedConsultation.createdAt).toLocaleString("ru-RU")}
-${selectedConsultation.patientName ? `ПАЦИЕНТ: ${selectedConsultation.patientName}` : ""}
+???? / ????: ${new Date(selectedConsultation.createdAt).toLocaleString("ru-RU")}
+${selectedConsultation.patientName ? `???????: ${selectedConsultation.patientName}` : ""}
 
-───────────────────────────────────────────────────────────────
-              ҚОРЫТЫНДЫ / ЗАКЛЮЧЕНИЕ
-───────────────────────────────────────────────────────────────
+???????????????????????????????????????????????????????????????
+              ????????? / ??????????
+???????????????????????????????????????????????????????????????
 
-${selectedConsultation.conclusion || "—"}
+${selectedConsultation.conclusion || "?"}
 
-───────────────────────────────────────────────────────────────
-              НЕГІЗГІ КӨРСЕТКІШТЕР / ОСНОВНЫЕ ПОКАЗАТЕЛИ
-───────────────────────────────────────────────────────────────
+???????????????????????????????????????????????????????????????
+      ????? ?????? / ????? ?????????
+???????????????????????????????????????????????????????????????
 
-• Жалпы жағдай / Общее состояние:
-${selectedConsultation.generalCondition || "—"}
+${selectedConsultation.generalCondition || "?"}
 
-• Ұйқы / Сон:
-${selectedConsultation.sleep || "—"}
+???????????????????????????????????????????????????????????????
+          ????????? / ????????????
+???????????????????????????????????????????????????????????????
 
-• Көңіл-күй / Настроение:
-${selectedConsultation.mood || "—"}
+${selectedConsultation.recommendations || "?"}
 
-• Стресс деңгейі / Уровень стресса:
-${selectedConsultation.stress || "—"}
+???????????????????????????????????????????????????????????????
+      ?????? ????????? / ???????? ???????
+???????????????????????????????????????????????????????????????
 
-• Физикалық симптомдар / Физические симптомы:
-${selectedConsultation.physicalSymptoms || "—"}
+${selectedConsultation.dialogueProtocol || "—"}
 
-───────────────────────────────────────────────────────────────
-              ҰСЫНЫСТАР / РЕКОМЕНДАЦИИ
-───────────────────────────────────────────────────────────────
-
-${selectedConsultation.recommendations || "—"}
-
-───────────────────────────────────────────────────────────────
-              ДИАЛОГ ЖАЗБАСЫ / РАСШИФРОВКА ДИАЛОГА
-───────────────────────────────────────────────────────────────
-
-${selectedConsultation.rawDialogue || "—"}
-
-───────────────────────────────────────────────────────────────
-Есеп AI арқылы жасалды • AMAN AI Platform • amanai.kz
-═══════════════════════════════════════════════════════════════
+???????????????????????????????????????????????????????????????
+???? AI ?????? ??????? ? AMAN AI Platform ? amanai.kz
+????????????????????????????????????????????????????????????????
     `.trim()
 
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" })
@@ -344,8 +291,8 @@ ${selectedConsultation.rawDialogue || "—"}
     return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
-  const dialogueLines = selectedConsultation?.rawDialogue 
-    ? parseDialogue(selectedConsultation.rawDialogue) 
+  const dialogueLines = selectedConsultation?.dialogueProtocol 
+    ? parseDialogue(selectedConsultation.dialogueProtocol) 
     : []
 
   return (
@@ -518,83 +465,21 @@ ${selectedConsultation.rawDialogue || "—"}
                       </div>
                     )}
 
-                    {/* Info Cards */}
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {selectedConsultation.generalCondition && (
-                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 hover:border-blue-500/30 transition-colors">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center">
-                              <Activity className="w-5 h-5 text-blue-400" />
-                            </div>
-                            <div>
-                              <h4 className="font-semibold">Жалпы жағдай</h4>
-                              <p className="text-xs text-muted-foreground">Общее состояние</p>
-                            </div>
+                    {/* General Condition */}
+                    {selectedConsultation.generalCondition && (
+                      <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 hover:border-blue-500/30 transition-colors">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center">
+                            <Activity className="w-5 h-5 text-blue-400" />
                           </div>
-                          <p className="text-sm leading-relaxed">{selectedConsultation.generalCondition}</p>
-                        </div>
-                      )}
-                      
-                      {selectedConsultation.sleep && (
-                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 hover:border-indigo-500/30 transition-colors">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center">
-                              <Moon className="w-5 h-5 text-indigo-400" />
-                            </div>
-                            <div>
-                              <h4 className="font-semibold">Ұйқы</h4>
-                              <p className="text-xs text-muted-foreground">Сон</p>
-                            </div>
+                          <div>
+                            <h4 className="font-semibold">Жалпы жағдай</h4>
+                            <p className="text-xs text-muted-foreground">Общее состояние</p>
                           </div>
-                          <p className="text-sm leading-relaxed">{selectedConsultation.sleep}</p>
                         </div>
-                      )}
-                      
-                      {selectedConsultation.mood && (
-                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 hover:border-pink-500/30 transition-colors">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500/20 to-rose-500/20 flex items-center justify-center">
-                              <Heart className="w-5 h-5 text-pink-400" />
-                            </div>
-                            <div>
-                              <h4 className="font-semibold">Көңіл-күй</h4>
-                              <p className="text-xs text-muted-foreground">Настроение</p>
-                            </div>
-                          </div>
-                          <p className="text-sm leading-relaxed">{selectedConsultation.mood}</p>
-                        </div>
-                      )}
-                      
-                      {selectedConsultation.stress && (
-                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 hover:border-orange-500/30 transition-colors">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 flex items-center justify-center">
-                              <Zap className="w-5 h-5 text-orange-400" />
-                            </div>
-                            <div>
-                              <h4 className="font-semibold">Стресс деңгейі</h4>
-                              <p className="text-xs text-muted-foreground">Уровень стресса</p>
-                            </div>
-                          </div>
-                          <p className="text-sm leading-relaxed">{selectedConsultation.stress}</p>
-                        </div>
-                      )}
-                      
-                      {selectedConsultation.physicalSymptoms && (
-                        <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 md:col-span-2 hover:border-red-500/30 transition-colors">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-rose-500/20 flex items-center justify-center">
-                              <Brain className="w-5 h-5 text-red-400" />
-                            </div>
-                            <div>
-                              <h4 className="font-semibold">Физикалық симптомдар</h4>
-                              <p className="text-xs text-muted-foreground">Физические симптомы</p>
-                            </div>
-                          </div>
-                          <p className="text-sm leading-relaxed">{selectedConsultation.physicalSymptoms}</p>
-                        </div>
-                      )}
-                    </div>
+                        <p className="text-sm leading-relaxed">{selectedConsultation.generalCondition}</p>
+                      </div>
+                    )}
 
                     {/* Recommendations */}
                     {selectedConsultation.recommendations && (
@@ -779,40 +664,6 @@ ${selectedConsultation.rawDialogue || "—"}
                         </button>
                       </div>
                     </div>
-
-                    {/* Quick Stats - only show if at least one has data */}
-                    {(selectedVoiceReport.generalWellbeing || selectedVoiceReport.sleepQuality || selectedVoiceReport.moodState || selectedVoiceReport.stressLevel) && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border-b">
-                        {selectedVoiceReport.generalWellbeing && (
-                          <div className="p-4 rounded-xl bg-rose-500/10 text-center">
-                            <Heart className="w-6 h-6 text-rose-500 mx-auto mb-2" />
-                            <p className="text-2xl font-bold text-rose-400">{selectedVoiceReport.generalWellbeing}/10</p>
-                            <p className="text-xs text-muted-foreground mt-1">Жағдай</p>
-                          </div>
-                        )}
-                        {selectedVoiceReport.sleepQuality && (
-                          <div className="p-4 rounded-xl bg-indigo-500/10 text-center">
-                            <Moon className="w-6 h-6 text-indigo-500 mx-auto mb-2" />
-                            <p className="text-lg font-bold text-indigo-400">{selectedVoiceReport.sleepQuality}</p>
-                            <p className="text-xs text-muted-foreground mt-1">Ұйқы</p>
-                          </div>
-                        )}
-                        {selectedVoiceReport.moodState && (
-                          <div className="p-4 rounded-xl bg-purple-500/10 text-center">
-                            <Brain className="w-6 h-6 text-purple-500 mx-auto mb-2" />
-                            <p className="text-lg font-bold text-purple-400">{selectedVoiceReport.moodState}</p>
-                            <p className="text-xs text-muted-foreground mt-1">Көңіл-күй</p>
-                          </div>
-                        )}
-                        {selectedVoiceReport.stressLevel && (
-                          <div className="p-4 rounded-xl bg-amber-500/10 text-center">
-                            <Activity className="w-6 h-6 text-amber-500 mx-auto mb-2" />
-                            <p className="text-lg font-bold text-amber-400">{selectedVoiceReport.stressLevel}</p>
-                            <p className="text-xs text-muted-foreground mt-1">Стресс</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
 
                     {/* Report Content - Structured Summary */}
                     <div className="p-6 space-y-4">
