@@ -19,13 +19,21 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { 
       result, 
+      report,
       recordingDuration,
       patientName 
     } = body
 
-    if (!result) {
+    const payload = report || result
+
+    if (!payload) {
       return NextResponse.json({ error: "No result data provided" }, { status: 400 })
     }
+
+    const generalCondition = payload.generalCondition ?? payload.general_condition ?? null
+    const dialogueProtocol = payload.dialogueProtocol ?? payload.dialogue_protocol ?? payload.raw_dialogue ?? null
+    const recommendations = payload.recommendations ?? null
+    const conclusion = payload.conclusion ?? null
 
     // Get patient ID if user is a patient
     let patientId = null
@@ -56,10 +64,6 @@ export async function POST(req: NextRequest) {
         recording_duration,
         title,
         general_condition,
-        sleep,
-        mood,
-        stress,
-        physical_symptoms,
         conclusion,
         recommendations,
         raw_dialogue,
@@ -74,10 +78,6 @@ export async function POST(req: NextRequest) {
         $6,
         $7,
         $8,
-        $9,
-        $10,
-        $11,
-        $12,
         NOW()
       ) RETURNING id, title, created_at as "createdAt"`,
       [
@@ -85,14 +85,10 @@ export async function POST(req: NextRequest) {
         patientName || session.user.name || "Пациент",
         recordingDuration || null,
         title,
-        result.general_condition || null,
-        result.sleep || null,
-        result.mood || null,
-        result.stress || null,
-        result.physical_symptoms || null,
-        result.conclusion || null,
-        result.recommendations || null,
-        result.raw_dialogue || null
+        generalCondition,
+        conclusion,
+        recommendations,
+        dialogueProtocol
       ]
     )
 
@@ -124,13 +120,9 @@ export async function GET(req: NextRequest) {
         recording_duration as "recordingDuration",
         title,
         general_condition as "generalCondition",
-        sleep,
-        mood,
-        stress,
-        physical_symptoms as "physicalSymptoms",
         conclusion,
         recommendations,
-        raw_dialogue as "rawDialogue",
+        raw_dialogue as "dialogueProtocol",
         created_at as "createdAt"
       FROM consultation_reports
     `

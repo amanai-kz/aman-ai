@@ -7,15 +7,11 @@ import {
   Loader2, 
   User, 
   Stethoscope,
-  Brain,
-  Moon,
-  Heart,
   Activity,
   FileText,
   AlertCircle,
   CheckCircle2,
   Clock,
-  Zap,
   Save
 } from "lucide-react"
 import { DashboardBackground } from "@/components/dashboard-background"
@@ -28,16 +24,14 @@ const WS_URL = typeof window !== "undefined"
 
 interface AnalysisResult {
   status: string
-  result: {
-    general_condition: string
-    sleep: string
-    mood: string
-    stress: string
-    physical_symptoms: string
-    conclusion: string
-    recommendations: string
-    raw_dialogue: string
-  }
+  result: ReportFields
+}
+
+interface ReportFields {
+  generalCondition: string
+  dialogueProtocol: string
+  recommendations: string
+  conclusion: string
 }
 
 interface DialogueLine {
@@ -170,7 +164,7 @@ export default function ConsultationPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          result: result.result,
+          report: result.result,
           recordingDuration: finalRecordingTime
         })
       })
@@ -208,7 +202,13 @@ export default function ConsultationPage() {
         try {
           const data = JSON.parse(event.data)
           if (data.status === "completed" && data.result) {
-            setResult(data)
+            const normalizedResult: ReportFields = {
+              generalCondition: data.result.generalCondition ?? data.result.general_condition ?? "",
+              dialogueProtocol: data.result.dialogueProtocol ?? data.result.dialogue_protocol ?? data.result.raw_dialogue ?? "",
+              recommendations: data.result.recommendations ?? "",
+              conclusion: data.result.conclusion ?? ""
+            }
+            setResult({ status: data.status, result: normalizedResult })
             setIsProcessing(false)
             setWsStatus("disconnected")
           } else if (data.status === "error") {
@@ -241,8 +241,8 @@ export default function ConsultationPage() {
     }
   }, [])
 
-  const dialogueLines = result?.result?.raw_dialogue 
-    ? parseDialogue(result.result.raw_dialogue) 
+  const dialogueLines = result?.result?.dialogueProtocol 
+    ? parseDialogue(result.result.dialogueProtocol) 
     : []
 
   return (
@@ -352,63 +352,16 @@ export default function ConsultationPage() {
                 <p className="text-lg font-medium text-emerald-400">{result.result.conclusion}</p>
               </div>
 
-              {/* Info Cards Grid */}
-              <div className="grid md:grid-cols-2 gap-4">
-                
-                {/* General Condition */}
-                <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                      <Activity className="w-4 h-4 text-blue-400" />
-                    </div>
-                    <h3 className="font-medium">Общее состояние</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{result.result.general_condition}</p>
-                </div>
 
-                {/* Sleep */}
-                <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-                      <Moon className="w-4 h-4 text-indigo-400" />
-                    </div>
-                    <h3 className="font-medium">Сон</h3>
+              {/* General Condition */}
+              <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                    <Activity className="w-4 h-4 text-blue-400" />
                   </div>
-                  <p className="text-sm text-muted-foreground">{result.result.sleep}</p>
+                  <h3 className="font-medium">Жалпы жағдай / Общее состояние</h3>
                 </div>
-
-                {/* Mood */}
-                <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-lg bg-pink-500/20 flex items-center justify-center">
-                      <Heart className="w-4 h-4 text-pink-400" />
-                    </div>
-                    <h3 className="font-medium">Настроение</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{result.result.mood}</p>
-                </div>
-
-                {/* Stress */}
-                <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
-                      <Zap className="w-4 h-4 text-orange-400" />
-                    </div>
-                    <h3 className="font-medium">Стресс</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{result.result.stress}</p>
-                </div>
-
-                {/* Physical Symptoms */}
-                <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5 md:col-span-2">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center">
-                      <Brain className="w-4 h-4 text-red-400" />
-                    </div>
-                    <h3 className="font-medium">Физические симптомы</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{result.result.physical_symptoms}</p>
-                </div>
+                <p className="text-sm text-muted-foreground">{result.result.generalCondition}</p>
               </div>
 
               {/* Recommendations */}
