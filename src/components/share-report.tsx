@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { Share2, MessageCircle, Mail, Link2, Check, Loader2, AlertCircle } from "lucide-react"
+import { Share2, MessageCircle, Mail, Link2, Check, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { generateConsultationPdf, ConsultationReportData } from "@/lib/pdf-generator"
 
@@ -32,8 +32,9 @@ interface UserContacts {
 export function ShareReport({ reportType, reportData, disabled }: ShareReportProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState<"whatsapp" | "email" | null>(null)
   const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
   const [contacts, setContacts] = useState<UserContacts | null>(null)
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -50,10 +51,9 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
   useEffect(() => {
     if (isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect()
-      const dropdownWidth = 280
+      const dropdownWidth = 300
       let left = rect.right - dropdownWidth
       
-      // Ensure dropdown doesn't go off-screen
       if (left < 10) left = 10
       
       setDropdownPosition({
@@ -74,11 +74,20 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
       ) {
         setIsOpen(false)
         setError("")
+        setSuccess("")
       }
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  // Clear messages after delay
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(""), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [success])
 
   const fetchContacts = async () => {
     try {
@@ -92,9 +101,113 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
     }
   }
 
-  const formatPhone = (phone: string): string => {
-    // Remove all non-digits
-    return phone.replace(/\D/g, "")
+  const generatePdfBase64 = async (): Promise<string | null> => {
+    if (reportType !== "consultation") return null
+    
+    try {
+      const pdfData: ConsultationReportData = {
+        patientName: reportData.patientName,
+        recordingDuration: reportData.recordingDuration,
+        generalCondition: reportData.generalCondition,
+        dialogueProtocol: reportData.dialogueProtocol,
+        recommendations: reportData.recommendations,
+        conclusion: reportData.conclusion,
+        createdAt: reportData.createdAt,
+      }
+      
+      const blob = await generateConsultationPdf(pdfData, { brandName: "AMAN AI" })
+      
+      // Convert blob to base64
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          const base64 = reader.result as string
+          // Remove data URL prefix
+          resolve(base64.split(",")[1])
+        }
+        reader.readAsDataURL(blob)
+      })
+    } catch (err) {
+      console.error("PDF generation failed:", err)
+      return null
+    }
+  }
+
+  const handleSend = async (type: "whatsapp" | "email") => {
+    setError("")
+    setSuccess("")
+    setLoading(type)
+    
+    try {
+      // Generate PDF for consultation reports
+      const pdfBase64 = await generatePdfBase64()
+      
+      const response = await fetch("/api/share/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          reportType,
+          reportId: reportData.id,
+          pdfBase64,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        if (data.needsPhone) {
+          setError("Укажите телефон в профиле")
+        } else if (data.needsEmail) {
+          setError("Email не указан")
+        } else if (data.notConfigured) {
+          // Fallback to manual sharing
+          if (type === "whatsapp") {
+            handleWhatsAppFallback()
+          } else {
+            handleEmailFallback()
+          }
+          return
+        } else {
+          setError(data.error || "Ошибка отправки")
+        }
+        return
+      }
+
+      setSuccess(data.message || "Отправлено!")
+      
+    } catch (err) {
+      console.error("Send error:", err)
+      setError("Ошибка соединения")
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleWhatsAppFallback = () => {
+    if (!contacts?.phone) {
+      setError("Телефон не указан в профиле")
+      return
+    }
+    
+    const phone = contacts.phone.replace(/\D/g, "")
+    const text = getReportText()
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+    window.open(url, "_blank")
+    setIsOpen(false)
+  }
+
+  const handleEmailFallback = () => {
+    if (!contacts?.email) {
+      setError("Email не указан")
+      return
+    }
+    
+    const date = new Date(reportData.createdAt).toLocaleDateString("ru-RU")
+    const subject = encodeURIComponent(`AMAN AI - Отчёт от ${date}`)
+    const body = encodeURIComponent(getReportText())
+    window.location.href = `mailto:${contacts.email}?subject=${subject}&body=${body}`
+    setIsOpen(false)
   }
 
   const getReportText = () => {
@@ -103,129 +216,17 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
     const recommendations = reportData.recommendations || ""
     
     let text = `🏥 AMAN AI - Отчёт от ${date}\n\n`
-    
-    if (summary) {
-      text += `📋 Заключение:\n${summary}\n\n`
-    }
-    
-    if (recommendations) {
-      text += `💡 Рекомендации:\n${recommendations}\n\n`
-    }
-    
-    text += `\n🔗 amanai.kz`
+    if (summary) text += `📋 Заключение:\n${summary}\n\n`
+    if (recommendations) text += `💡 Рекомендации:\n${recommendations}\n\n`
+    text += `🔗 amanai.kz`
     
     return text
-  }
-
-  const handleWhatsAppShare = async () => {
-    setError("")
-    
-    if (!contacts?.phone) {
-      setError("Телефон не указан в профиле. Добавьте номер в настройках.")
-      return
-    }
-
-    setLoading(true)
-    
-    try {
-      const phone = formatPhone(contacts.phone)
-      const text = encodeURIComponent(getReportText())
-      
-      // For consultation reports, also generate and download PDF
-      if (reportType === "consultation") {
-        try {
-          const date = new Date(reportData.createdAt).toLocaleDateString("ru-RU")
-          const pdfData: ConsultationReportData = {
-            patientName: reportData.patientName,
-            recordingDuration: reportData.recordingDuration,
-            generalCondition: reportData.generalCondition,
-            dialogueProtocol: reportData.dialogueProtocol,
-            recommendations: reportData.recommendations,
-            conclusion: reportData.conclusion,
-            createdAt: reportData.createdAt,
-          }
-          
-          const blob = await generateConsultationPdf(pdfData, { brandName: "AMAN AI" })
-          const url = URL.createObjectURL(blob)
-          const link = document.createElement("a")
-          link.href = url
-          link.download = `AMAN_AI_Report_${date.replace(/\./g, "-")}.pdf`
-          link.click()
-          URL.revokeObjectURL(url)
-        } catch (err) {
-          console.error("PDF generation failed:", err)
-        }
-      }
-      
-      // Open WhatsApp with the phone number
-      const waUrl = `https://wa.me/${phone}?text=${text}`
-      window.open(waUrl, "_blank")
-      setIsOpen(false)
-      
-    } catch (err) {
-      setError("Не удалось открыть WhatsApp")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleEmailShare = async () => {
-    setError("")
-    
-    if (!contacts?.email) {
-      setError("Email не найден. Проверьте профиль.")
-      return
-    }
-
-    setLoading(true)
-    
-    try {
-      const date = new Date(reportData.createdAt).toLocaleDateString("ru-RU")
-      const subject = encodeURIComponent(`AMAN AI - Отчёт от ${date}`)
-      let body = getReportText()
-      
-      // For consultation reports, generate PDF
-      if (reportType === "consultation") {
-        try {
-          const pdfData: ConsultationReportData = {
-            patientName: reportData.patientName,
-            recordingDuration: reportData.recordingDuration,
-            generalCondition: reportData.generalCondition,
-            dialogueProtocol: reportData.dialogueProtocol,
-            recommendations: reportData.recommendations,
-            conclusion: reportData.conclusion,
-            createdAt: reportData.createdAt,
-          }
-          
-          const blob = await generateConsultationPdf(pdfData, { brandName: "AMAN AI" })
-          const url = URL.createObjectURL(blob)
-          const link = document.createElement("a")
-          link.href = url
-          link.download = `AMAN_AI_Report_${date.replace(/\./g, "-")}.pdf`
-          link.click()
-          URL.revokeObjectURL(url)
-          
-          body += "\n\n📎 PDF файл скачан — прикрепите его к письму."
-        } catch (err) {
-          console.error("PDF generation failed:", err)
-        }
-      }
-      
-      // Open email client
-      const mailtoUrl = `mailto:${contacts.email}?subject=${subject}&body=${encodeURIComponent(body)}`
-      window.location.href = mailtoUrl
-      setIsOpen(false)
-      
-    } finally {
-      setLoading(false)
-    }
   }
 
   const handleCopyLink = async () => {
     setError("")
     try {
-      const text = getReportText()
-      await navigator.clipboard.writeText(text)
+      await navigator.clipboard.writeText(getReportText())
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -244,13 +245,21 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
   const dropdown = isOpen && typeof document !== "undefined" ? createPortal(
     <div 
       ref={dropdownRef}
-      className="fixed w-70 bg-background/95 backdrop-blur-sm rounded-xl border shadow-xl z-[9999] overflow-hidden animate-in fade-in zoom-in-95 duration-150"
-      style={{ top: dropdownPosition.top, left: dropdownPosition.left, width: 280 }}
+      className="fixed bg-background/95 backdrop-blur-sm rounded-xl border shadow-xl z-[9999] overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+      style={{ top: dropdownPosition.top, left: dropdownPosition.left, width: 300 }}
     >
-      <div className="p-1">
+      <div className="p-2">
+        {/* Success Message */}
+        {success && (
+          <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-emerald-500/10 rounded-lg text-emerald-500 text-sm">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            <span>{success}</span>
+          </div>
+        )}
+
         {/* Error Message */}
         {error && (
-          <div className="flex items-start gap-2 px-3 py-2 mb-1 bg-red-500/10 rounded-lg text-red-500 text-xs">
+          <div className="flex items-start gap-2 px-3 py-2 mb-2 bg-red-500/10 rounded-lg text-red-500 text-xs">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
@@ -258,19 +267,19 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
 
         {/* WhatsApp */}
         <button
-          onClick={handleWhatsAppShare}
-          disabled={loading}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-500/10 transition-colors text-left disabled:opacity-50"
+          onClick={() => handleSend("whatsapp")}
+          disabled={loading !== null}
+          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-emerald-500/10 transition-colors text-left disabled:opacity-50"
         >
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-            {loading ? (
-              <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+            {loading === "whatsapp" ? (
+              <Loader2 className="w-5 h-5 text-emerald-500 animate-spin" />
             ) : (
-              <MessageCircle className="w-4 h-4 text-emerald-500" />
+              <MessageCircle className="w-5 h-5 text-emerald-500" />
             )}
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium">WhatsApp</p>
+            <p className="font-medium">WhatsApp</p>
             <p className="text-xs text-muted-foreground">
               {contacts?.phone || "Телефон не указан"}
             </p>
@@ -279,15 +288,19 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
 
         {/* Email */}
         <button
-          onClick={handleEmailShare}
-          disabled={loading}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-blue-500/10 transition-colors text-left disabled:opacity-50"
+          onClick={() => handleSend("email")}
+          disabled={loading !== null}
+          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-blue-500/10 transition-colors text-left disabled:opacity-50"
         >
-          <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-            <Mail className="w-4 h-4 text-blue-500" />
+          <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+            {loading === "email" ? (
+              <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+            ) : (
+              <Mail className="w-5 h-5 text-blue-500" />
+            )}
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium">Email</p>
+            <p className="font-medium">Email</p>
             <p className="text-xs text-muted-foreground truncate">
               {contacts?.email || "Email не указан"}
             </p>
@@ -297,31 +310,28 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
         {/* Copy */}
         <button
           onClick={handleCopyLink}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-purple-500/10 transition-colors text-left"
+          disabled={loading !== null}
+          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-purple-500/10 transition-colors text-left disabled:opacity-50"
         >
-          <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
             {copied ? (
-              <Check className="w-4 h-4 text-emerald-500" />
+              <Check className="w-5 h-5 text-emerald-500" />
             ) : (
-              <Link2 className="w-4 h-4 text-purple-500" />
+              <Link2 className="w-5 h-5 text-purple-500" />
             )}
           </div>
           <div>
-            <p className="text-sm font-medium">
-              {copied ? "Көшірілді!" : "Көшіру"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {copied ? "Скопировано!" : "Мәтінді көшіру"}
-            </p>
+            <p className="font-medium">{copied ? "Скопировано!" : "Копировать текст"}</p>
+            <p className="text-xs text-muted-foreground">В буфер обмена</p>
           </div>
         </button>
       </div>
 
       {/* Hint */}
-      {(!contacts?.phone || !contacts?.email) && (
-        <div className="px-3 py-2 border-t text-xs text-muted-foreground text-center">
+      {(!contacts?.phone) && (
+        <div className="px-3 py-2 border-t text-xs text-muted-foreground text-center bg-muted/30">
           <a href="/dashboard/profile" className="text-blue-500 hover:underline">
-            Добавьте контакты в профиле →
+            Добавьте телефон в профиле →
           </a>
         </div>
       )}
