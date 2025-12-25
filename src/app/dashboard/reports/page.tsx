@@ -7,6 +7,7 @@ import {
   Stethoscope, CheckCircle2, User, AudioLines, Phone
 } from "lucide-react"
 import { DashboardBackground } from "@/components/dashboard-background"
+import { ShareReport } from "@/components/share-report"
 import { cn } from "@/lib/utils"
 import { generateConsultationPdf } from "@/lib/pdf-generator"
 
@@ -453,6 +454,21 @@ export default function ReportsPage() {
                               </>
                             )}
                           </button>
+                          <ShareReport
+                            reportType="consultation"
+                            reportData={{
+                              id: selectedConsultation.id,
+                              title: selectedConsultation.title,
+                              conclusion: selectedConsultation.conclusion,
+                              recommendations: selectedConsultation.recommendations,
+                              generalCondition: selectedConsultation.generalCondition,
+                              createdAt: selectedConsultation.createdAt,
+                              patientName: selectedConsultation.patientName,
+                              recordingDuration: selectedConsultation.recordingDuration,
+                              dialogueProtocol: selectedConsultation.dialogueProtocol,
+                            }}
+                            disabled={!hasConsultationContent}
+                          />
                           <button
                             onClick={() => deleteConsultationReport(selectedConsultation.id)}
                             className="p-2 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
@@ -670,13 +686,25 @@ export default function ReportsPage() {
                           </h2>
                         </div>
                         
-                        <button
-                          onClick={() => deleteVoiceReport(selectedVoiceReport.id)}
-                          className="p-2 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
-                          title="Өшіру"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <ShareReport
+                            reportType="voice"
+                            reportData={{
+                              id: selectedVoiceReport.id,
+                              title: selectedVoiceReport.title,
+                              summary: selectedVoiceReport.summary,
+                              createdAt: selectedVoiceReport.createdAt,
+                            }}
+                            disabled={!selectedVoiceReport.summary}
+                          />
+                          <button
+                            onClick={() => deleteVoiceReport(selectedVoiceReport.id)}
+                            className="p-2 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
+                            title="Өшіру"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
 
