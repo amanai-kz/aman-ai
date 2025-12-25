@@ -84,16 +84,19 @@ model Patient {
   dateOfBirth DateTime?
   gender      Gender?
   phone       String?
+  phoneNumber String?
   address     String?
+  emergencyContact String?
+  medicalHistory   String?
   
   // Medical info
   bloodType   String?
-  allergies   String[]
-  conditions  String[]  // Existing medical conditions
-  medications String[]  // Current medications
+  allergies   String[]  @default([])
+  conditions  String[]  @default([])
+  medications String[]  @default([])
   
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt   DateTime  @default(now()) @updatedAt
 
   // Relations
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
