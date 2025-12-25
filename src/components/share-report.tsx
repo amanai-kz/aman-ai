@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { createPortal } from "react-dom"
 import { Share2, MessageCircle, Mail, Link2, Check, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { generateConsultationPdf, ConsultationReportData } from "@/lib/pdf-generator"
@@ -26,12 +27,30 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
   const [isOpen, setIsOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [emailLoading, setEmailLoading] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Calculate dropdown position when opening
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        left: rect.right - 224, // 224px = w-56
+      })
+    }
+  }, [isOpen])
 
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current && 
+        !dropdownRef.current.contains(event.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false)
       }
     }
@@ -59,11 +78,6 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
     return text
   }
 
-  const getReportUrl = () => {
-    if (typeof window === "undefined") return ""
-    return `${window.location.origin}/dashboard/reports?id=${reportData.id}&type=${reportType}`
-  }
-
   const handleWhatsAppShare = () => {
     const text = encodeURIComponent(getReportText())
     const url = `https://wa.me/?text=${text}`
@@ -78,11 +92,9 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
       const date = new Date(reportData.createdAt).toLocaleDateString("ru-RU")
       const subject = encodeURIComponent(`AMAN AI - Отчёт от ${date}`)
       
-      // Generate PDF for consultation reports
       let body = getReportText()
       
       if (reportType === "consultation") {
-        // Try to generate PDF and notify user
         try {
           const pdfData: ConsultationReportData = {
             patientName: reportData.patientName,
@@ -96,7 +108,6 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
           
           const blob = await generateConsultationPdf(pdfData, { brandName: "AMAN AI" })
           
-          // Download PDF first
           const url = URL.createObjectURL(blob)
           const link = document.createElement("a")
           link.href = url
@@ -125,8 +136,7 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
       await navigator.clipboard.writeText(text)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      // Fallback for older browsers
+    } catch {
       const textArea = document.createElement("textarea")
       textArea.value = getReportText()
       document.body.appendChild(textArea)
@@ -136,11 +146,81 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }
+    setIsOpen(false)
   }
 
+  const dropdown = isOpen && typeof document !== "undefined" ? createPortal(
+    <div 
+      ref={dropdownRef}
+      className="fixed w-56 bg-background/95 backdrop-blur-sm rounded-xl border shadow-xl z-[9999] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+      style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+    >
+      <div className="p-1">
+        {/* WhatsApp */}
+        <button
+          onClick={handleWhatsAppShare}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-500/10 transition-colors text-left"
+        >
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+            <MessageCircle className="w-4 h-4 text-emerald-500" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">WhatsApp</p>
+            <p className="text-xs text-muted-foreground">Хабарламамен жіберу</p>
+          </div>
+        </button>
+
+        {/* Email */}
+        <button
+          onClick={handleEmailShare}
+          disabled={emailLoading}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-blue-500/10 transition-colors text-left disabled:opacity-50"
+        >
+          <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+            {emailLoading ? (
+              <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+            ) : (
+              <Mail className="w-4 h-4 text-blue-500" />
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-medium">Email</p>
+            <p className="text-xs text-muted-foreground">
+              {reportType === "consultation" ? "PDF қоса жіберу" : "Поштаға жіберу"}
+            </p>
+          </div>
+        </button>
+
+        {/* Copy */}
+        <button
+          onClick={handleCopyLink}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-purple-500/10 transition-colors text-left"
+        >
+          <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+            {copied ? (
+              <Check className="w-4 h-4 text-emerald-500" />
+            ) : (
+              <Link2 className="w-4 h-4 text-purple-500" />
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-medium">
+              {copied ? "Көшірілді!" : "Көшіру"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {copied ? "Скопировано!" : "Мәтінді көшіру"}
+            </p>
+          </div>
+        </button>
+      </div>
+    </div>,
+    document.body
+  ) : null
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <>
       <button
+        ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
         disabled={disabled}
         className={cn(
@@ -153,70 +233,7 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
         <Share2 className="w-4 h-4" />
         <span className="hidden sm:inline">Бөлісу</span>
       </button>
-
-      {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-56 bg-background/95 backdrop-blur-sm rounded-xl border shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="p-1">
-            {/* WhatsApp */}
-            <button
-              onClick={handleWhatsAppShare}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-emerald-500/10 transition-colors text-left"
-            >
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                <MessageCircle className="w-4 h-4 text-emerald-500" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">WhatsApp</p>
-                <p className="text-xs text-muted-foreground">Хабарламамен жіберу</p>
-              </div>
-            </button>
-
-            {/* Email */}
-            <button
-              onClick={handleEmailShare}
-              disabled={emailLoading}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-blue-500/10 transition-colors text-left disabled:opacity-50"
-            >
-              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                {emailLoading ? (
-                  <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
-                ) : (
-                  <Mail className="w-4 h-4 text-blue-500" />
-                )}
-              </div>
-              <div>
-                <p className="text-sm font-medium">Email</p>
-                <p className="text-xs text-muted-foreground">
-                  {reportType === "consultation" ? "PDF қоса жіберу" : "Поштаға жіберу"}
-                </p>
-              </div>
-            </button>
-
-            {/* Copy */}
-            <button
-              onClick={handleCopyLink}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-purple-500/10 transition-colors text-left"
-            >
-              <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                {copied ? (
-                  <Check className="w-4 h-4 text-emerald-500" />
-                ) : (
-                  <Link2 className="w-4 h-4 text-purple-500" />
-                )}
-              </div>
-              <div>
-                <p className="text-sm font-medium">
-                  {copied ? "Көшірілді!" : "Көшіру"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {copied ? "Скопировано!" : "Мәтінді көшіру"}
-                </p>
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+      {dropdown}
+    </>
   )
 }
-
