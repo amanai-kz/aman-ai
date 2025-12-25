@@ -24,7 +24,7 @@ interface PdfOptions {
 const FONT_NAME = "NotoSans"
 const FONT_FILE = "NotoSans-Regular.ttf"
 const DEFAULT_FONT_PATH = "/fonts/NotoSans-Regular.ttf"
-const DEFAULT_LOGO = "/placeholder-logo.png"
+const DEFAULT_LOGO = "/apple-icon.png"
 
 let fontDataCache: string | null = null
 let logoCache: Record<string, string> = {}
