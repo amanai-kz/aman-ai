@@ -152,7 +152,7 @@ export function ShareReport({ reportType, reportData, disabled }: ShareReportPro
   const dropdown = isOpen && typeof document !== "undefined" ? createPortal(
     <div 
       ref={dropdownRef}
-      className="fixed w-56 bg-background/95 backdrop-blur-sm rounded-xl border shadow-xl z-[9999] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+      className="fixed w-56 bg-background/95 backdrop-blur-sm rounded-xl border shadow-xl z-[9999] overflow-hidden animate-in fade-in zoom-in-95 duration-150"
       style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
     >
       <div className="p-1">
