@@ -36,6 +36,7 @@ import {
   BookOpen,
   AudioLines,
   Mic,
+  User,
   LucideIcon,
 } from "lucide-react"
 
@@ -116,14 +117,17 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
           </Link>
         </div>
 
-        {/* User info */}
-        <div className="px-6 py-4 border-b border-border">
+        {/* User info - clickable to profile */}
+        <Link 
+          href="/dashboard/profile"
+          className="block px-6 py-4 border-b border-border hover:bg-secondary/50 transition-colors"
+        >
           <p className="font-medium truncate">{user.name || "Пользователь"}</p>
           <p className="text-sm text-muted-foreground truncate">{user.email}</p>
           <span className="inline-block mt-2 px-2 py-0.5 text-xs rounded-full bg-secondary text-muted-foreground">
             {user.role === "ADMIN" ? "Администратор" : user.role === "DOCTOR" ? "Врач" : "Пациент"}
           </span>
-        </div>
+        </Link>
 
         {/* Navigation */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
@@ -150,8 +154,25 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
         {/* Bottom actions */}
         <div className="p-3 border-t border-border space-y-1">
           <Link
+            href="/dashboard/profile"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors",
+              pathname === "/dashboard/profile"
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+            )}
+          >
+            <User className="w-4 h-4" />
+            <span>Профиль</span>
+          </Link>
+          <Link
             href={user.role === "DOCTOR" ? "/doctor/settings" : user.role === "ADMIN" ? "/admin/settings" : "/dashboard/settings"}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors",
+              pathname.includes("/settings")
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+            )}
           >
             <Settings className="w-4 h-4" />
             <span>Настройки</span>

@@ -314,41 +314,41 @@ model HealthReport {
 model VoiceReport {
   id              String   @id @default(cuid())
   
-  // VAPI Call Info (не сохраняем сам диалог!)
-  vapiCallId      String   @unique
-  callDuration    Int?     // seconds
+  // VAPI Call Info
+  vapiCallId      String   @unique @map("vapi_call_id")
+  callDuration    Int?     @map("call_duration")
   
-  // Patient info (может быть анонимный)
-  patientId       String?
-  patientName     String?
+  // Patient info
+  patientId       String?  @map("patient_id")
+  patientName     String?  @map("patient_name")
   
   // AI-Generated Report Content
-  title           String   // "Есеп / Отчёт от 22.12.2024"
-  summary         String   @db.Text  // Краткое резюме состояния
+  title           String
+  summary         String   @db.Text
   
   // Structured Assessment Data
-  generalWellbeing    Int?      // 1-10
-  sleepQuality        String?   // жақсы/орташа/нашар
-  sleepHours          Float?
-  moodState           String?   // көңілді/бейтарап/мұңды/мазасыз
-  stressLevel         String?   // төмен/орташа/жоғары
-  stressSources       String[]  // жұмыс, отбасы, etc.
-  physicalSymptoms    String[]  // бас ауруы, шаршау, etc.
-  cognitiveIssues     String[]  // концентрация, жады, etc.
-  socialConnections   String?   // жиі/сирек/жоқ
+  generalWellbeing    Int?      @map("general_wellbeing")
+  sleepQuality        String?   @map("sleep_quality")
+  sleepHours          Float?    @map("sleep_hours")
+  moodState           String?   @map("mood_state")
+  stressLevel         String?   @map("stress_level")
+  stressSources       String[]  @map("stress_sources")
+  physicalSymptoms    String[]  @map("physical_symptoms")
+  cognitiveIssues     String[]  @map("cognitive_issues")
+  socialConnections   String?   @map("social_connections")
   
   // AI Analysis
-  riskLevel           String?   // LOW, MODERATE, HIGH, CRITICAL
-  aiInsights          String[]  // AI-generated insights
-  recommendations     String[]  // AI recommendations
+  riskLevel           String?   @map("risk_level")
+  aiInsights          String[]  @map("ai_insights")
+  recommendations     String[]
   
   // Flags
-  requiresFollowup    Boolean   @default(false)
-  urgentAttention     Boolean   @default(false)
+  requiresFollowup    Boolean   @default(false) @map("requires_followup")
+  urgentAttention     Boolean   @default(false) @map("urgent_attention")
   
   // Metadata
-  language            String    @default("kk") // kk, ru
-  createdAt           DateTime  @default(now())
+  language            String    @default("kk")
+  createdAt           DateTime  @default(now()) @map("created_at")
   
   // Relations
   patient             Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
@@ -361,32 +361,32 @@ model VoiceReport {
 // ============================================
 
 model ConsultationReport {
-  id                String   @id @default(cuid())
+  id                String   @id @default(cuid()) @db.VarChar(255)
   
   // Patient info
-  patientId         String?
-  patientName       String?
+  patientId         String?  @map("patient_id") @db.VarChar(255)
+  patientName       String?  @map("patient_name") @db.VarChar(255)
   
   // Recording info
-  recordingDuration Int?     // seconds
+  recordingDuration Int?     @map("recording_duration")
   
   // AI-Analyzed Content
-  title             String   // "Консультация от 23.12.2024"
+  title             String   @db.VarChar(255)
   
   // Structured data from AI analysis
-  generalCondition  String?  @db.Text  // Общее состояние
-  sleep             String?  @db.Text  // Сон
-  mood              String?  @db.Text  // Настроение
-  stress            String?  @db.Text  // Стресс
-  physicalSymptoms  String?  @db.Text  // Физические симптомы
-  conclusion        String?  @db.Text  // Заключение врача
-  recommendations   String?  @db.Text  // Рекомендации
+  generalCondition  String?  @db.Text @map("general_condition")
+  sleep             String?  @db.Text
+  mood              String?  @db.Text
+  stress            String?  @db.Text
+  physicalSymptoms  String?  @db.Text @map("physical_symptoms")
+  conclusion        String?  @db.Text
+  recommendations   String?  @db.Text
   
   // Raw dialogue
-  rawDialogue       String?  @db.Text  // Полная расшифровка
+  rawDialogue       String?  @db.Text @map("raw_dialogue")
   
   // Metadata
-  createdAt         DateTime @default(now())
+  createdAt         DateTime @default(now()) @map("created_at")
   
   // Relations
   patient           Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
