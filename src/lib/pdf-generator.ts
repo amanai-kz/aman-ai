@@ -24,10 +24,44 @@ interface PdfOptions {
 const FONT_NAME = "NotoSans"
 const FONT_FILE = "NotoSans-Regular.ttf"
 const DEFAULT_FONT_PATH = "/fonts/NotoSans-Regular.ttf"
-const DEFAULT_LOGO = "/apple-icon.png"
+const DEFAULT_LOGO = "/icon.svg"
 
 let fontDataCache: string | null = null
 let logoCache: Record<string, string> = {}
+
+const svgToPngDataUrl = (svgText: string, size: number = 128): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const svg = svgText
+      .replace(/stroke="currentColor"/g, 'stroke="#1e293b"')
+      .replace(/width="\d+"/, `width="${size}"`)
+      .replace(/height="\d+"/, `height="${size}"`)
+    
+    const blob = new Blob([svg], { type: "image/svg+xml" })
+    const url = URL.createObjectURL(blob)
+    const img = new Image()
+    
+    img.onload = () => {
+      const canvas = document.createElement("canvas")
+      canvas.width = size
+      canvas.height = size
+      const ctx = canvas.getContext("2d")
+      if (!ctx) {
+        reject(new Error("Failed to get canvas context"))
+        return
+      }
+      ctx.drawImage(img, 0, 0, size, size)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL("image/png"))
+    }
+    
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error("Failed to load SVG"))
+    }
+    
+    img.src = url
+  })
+}
 
 const bufferToBase64 = (buffer: ArrayBuffer) => {
   const bytes = new Uint8Array(buffer)
@@ -43,6 +77,16 @@ const fetchAssetAsDataUrl = async (url: string) => {
   if (logoCache[url]) return logoCache[url]
   const response = await fetch(url)
   if (!response.ok) throw new Error("Failed to load asset for PDF")
+  
+  // Handle SVG files - convert to PNG
+  if (url.endsWith(".svg")) {
+    const svgText = await response.text()
+    const dataUrl = await svgToPngDataUrl(svgText, 128)
+    logoCache[url] = dataUrl
+    return dataUrl
+  }
+  
+  // Handle other image formats
   const blob = await response.blob()
   const reader = new FileReader()
   const dataUrlPromise = new Promise<string>((resolve, reject) => {
