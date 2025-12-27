@@ -9,9 +9,12 @@ Team: Nursultan (master), Damir
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from pydantic import BaseModel
 from datetime import datetime
+
+from app.services.pdf_parser import extract_text_from_pdf, normalize_text
+from app.services.invivo_blood_parser import parse_invivo_blood
 
 router = APIRouter()
 
@@ -87,6 +90,13 @@ async def analyze_blood_test(data: BloodTestInput):
     )
 
 
+class BloodUploadResponse(BaseModel):
+    patientId: str
+    extracted: dict
+    missing: List[str]
+    rawTextLength: int
+
+
 @router.post("/upload")
 async def upload_blood_test_file(file: UploadFile = File(...)):
     """
@@ -103,6 +113,39 @@ async def upload_blood_test_file(file: UploadFile = File(...)):
         "status": "processing",
         "message": "File uploaded. Extracting markers...",
     }
+
+
+@router.post("/upload-pdf", response_model=BloodUploadResponse)
+async def upload_blood_pdf(
+    file: UploadFile = File(...),
+    patient_id: str = Form("unknown"),
+):
+    """
+    Upload Invivo PDF, extract text, parse markers, and return structured data.
+    """
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Invalid file type")
+
+    file_bytes = await file.read()
+    raw_text = extract_text_from_pdf(file_bytes)
+    if not raw_text.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="PDF contains no extractable text. OCR is not supported.",
+        )
+
+    normalized_text = normalize_text(raw_text)
+    extracted = parse_invivo_blood(normalized_text)
+    missing = [key for key, marker in extracted.items() if marker["value"] is None]
+
+    # TODO: Persist extracted markers to patient profile once DB layer is wired
+
+    return BloodUploadResponse(
+        patientId=patient_id,
+        extracted=extracted,
+        missing=missing,
+        rawTextLength=len(normalized_text),
+    )
 
 
 @router.get("/history", response_model=List[BloodAnalysisResult])
@@ -169,5 +212,4 @@ async def get_marker_trends(marker_name: str):
         "data_points": [],
         "trend": "stable",
     }
-
 
