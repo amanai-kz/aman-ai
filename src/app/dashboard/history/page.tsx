@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardBackground } from "@/components/dashboard-background"
+import { db } from "@/lib/db"
 import { 
   Clock, 
   Filter, 
@@ -28,43 +29,114 @@ const serviceIcons: Record<string, React.ElementType> = {
   REHABILITATION: HeartPulse,
 }
 
-// Mock data for demo
-const mockHistory = [
-  {
-    id: "1",
-    type: "QUESTIONNAIRE",
-    title: "Опросник PSS-10",
-    description: "Оценка уровня стресса",
-    date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
-    status: "completed",
-    result: { score: 18, level: "moderate" },
-  },
-  {
-    id: "2",
-    type: "IOT",
-    title: "IoT Мониторинг",
-    description: "Сессия 15 минут",
-    date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5),
-    status: "completed",
-    result: { hrv: 45, stress: 32 },
-  },
-  {
-    id: "3",
-    type: "CT_MRI",
-    title: "МРТ головного мозга",
-    description: "AI анализ снимка",
-    date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10),
-    status: "reviewed",
-    result: { findings: 0, confidence: 0.94 },
-  },
-]
+interface HistoryItem {
+  id: string
+  type: string
+  title: string
+  description: string
+  date: Date
+  status: string
+  result: {
+    score?: number
+    level?: string
+    hrv?: number
+    stress?: number
+    findings?: number
+    confidence?: number
+  }
+}
 
 export default async function HistoryPage() {
   const session = await auth()
   if (!session) redirect("/login")
 
-  // In real app, fetch from database
-  const history = mockHistory
+  // Get patient profile
+  const user = await db.user.findUnique({
+    where: { id: session.user.id },
+    include: { patient: true },
+  })
+
+  const patientId = user?.patient?.id
+
+  // Fetch real data from database
+  const history: HistoryItem[] = []
+
+  if (patientId) {
+    // Fetch analyses
+    const analyses = await db.analysis.findMany({
+      where: { patientId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    })
+
+    for (const analysis of analyses) {
+      const result = analysis.result as Record<string, unknown> | null
+      history.push({
+        id: analysis.id,
+        type: analysis.serviceType,
+        title: analysis.serviceType === "CT_MRI" ? "МРТ головного мозга" :
+               analysis.serviceType === "GENETICS" ? "Генетический анализ" :
+               analysis.serviceType === "BLOOD" ? "Анализ крови" : "Анализ",
+        description: "AI анализ",
+        date: analysis.createdAt,
+        status: analysis.status === "REVIEWED" ? "reviewed" : 
+                analysis.status === "COMPLETED" ? "completed" : 
+                analysis.status === "FAILED" ? "failed" : "pending",
+        result: {
+          findings: Array.isArray(analysis.findings) ? analysis.findings.length : 0,
+          confidence: analysis.confidence ?? undefined,
+        },
+      })
+    }
+
+    // Fetch IoT sessions
+    const iotSessions = await db.iotSession.findMany({
+      where: { patientId },
+      orderBy: { startedAt: "desc" },
+      take: 50,
+    })
+
+    for (const session of iotSessions) {
+      history.push({
+        id: session.id,
+        type: "IOT",
+        title: "IoT Мониторинг",
+        description: session.duration ? `Сессия ${Math.round(session.duration / 60)} минут` : "Сессия",
+        date: session.startedAt,
+        status: session.endedAt ? "completed" : "pending",
+        result: {
+          hrv: session.avgHeartRate ?? undefined,
+          stress: session.avgStressLevel ? Math.round(session.avgStressLevel) : undefined,
+        },
+      })
+    }
+
+    // Fetch questionnaire results
+    const questionnaires = await db.questionnaireResult.findMany({
+      where: { patientId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    })
+
+    for (const q of questionnaires) {
+      history.push({
+        id: q.id,
+        type: "QUESTIONNAIRE",
+        title: q.questionnaireId === "PSS-10" ? "Опросник PSS-10" : 
+               q.questionnaireId === "MMSE" ? "Опросник MMSE" : "Опросник",
+        description: "Оценка уровня стресса",
+        date: q.createdAt,
+        status: "completed",
+        result: {
+          score: q.totalScore ?? undefined,
+          level: q.category ?? undefined,
+        },
+      })
+    }
+
+    // Sort by date
+    history.sort((a, b) => b.date.getTime() - a.date.getTime())
+  }
 
   return (
     <>

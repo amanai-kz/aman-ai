@@ -138,6 +138,9 @@ export async function GET(req: NextRequest) {
       if (patientResult.rows.length > 0) {
         query += ` WHERE patient_id = $1`
         params.push(patientResult.rows[0].id)
+      } else {
+        // No patient profile - return empty array
+        return NextResponse.json({ reports: [] })
       }
     }
     
