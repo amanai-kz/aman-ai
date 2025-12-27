@@ -37,9 +37,10 @@ opencv-python-headless==4.10.0.84
 # Utils
 python-dotenv==1.0.1
 redis==5.2.1
+pdfplumber==0.11.4
+PyMuPDF==1.24.10
 
 # Development
 pytest==8.3.4
 pytest-asyncio==0.25.0
-
 
