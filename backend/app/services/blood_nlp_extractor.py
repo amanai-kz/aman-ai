@@ -292,9 +292,28 @@ class BloodNLPExtractor:
             flags=re.IGNORECASE
         )
         
-        # Reference range pattern (e.g., "норма: 3.9-6.1" or "ref: 3.9 - 6.1")
+        # Reference range patterns - multiple formats
+        # Pattern 1: "норма: 3.9-6.1" or "ref: 3.9 - 6.1"
+        self.ref_range_pattern_labeled = re.compile(
+            r"(?:норма|ref|reference|референс|нормасы)[:\s]*(?P<min>\d+(?:[.,]\d+)?)\s*[-–—]\s*(?P<max>\d+(?:[.,]\d+)?)",
+            flags=re.IGNORECASE
+        )
+        
+        # Pattern 2: Just a range at end of line "3.9 - 6.1" or "(3.9-6.1)"
+        self.ref_range_pattern_simple = re.compile(
+            r"(?:\()?(?P<min>\d+(?:[.,]\d+)?)\s*[-–—]\s*(?P<max>\d+(?:[.,]\d+)?)(?:\))?(?:\s*(?:ммоль|мкмоль|г|мг|ед|u|g|mg|mmol)?(?:/л|/l)?)?$",
+            flags=re.IGNORECASE
+        )
+        
+        # Pattern 3: "< 5.0" or "> 2.0" for single-bound references  
+        self.ref_range_pattern_single = re.compile(
+            r"(?P<op>[<>≤≥])\s*(?P<val>\d+(?:[.,]\d+)?)",
+            flags=re.IGNORECASE
+        )
+        
+        # Combined pattern for inline search
         self.ref_range_pattern = re.compile(
-            r"(?:норма|ref|reference|референс)[:\s]*(?P<min>\d+(?:[.,]\d+)?)\s*[-–]\s*(?P<max>\d+(?:[.,]\d+)?)",
+            r"(?:(?:норма|ref|reference|референс|нормасы)[:\s]*)?(?P<min>\d+(?:[.,]\d+)?)\s*[-–—]\s*(?P<max>\d+(?:[.,]\d+)?)",
             flags=re.IGNORECASE
         )
         
@@ -379,13 +398,42 @@ class BloodNLPExtractor:
                             confidence=1.0,
                             raw_text=line
                         )
-                        self._add_reference_and_status(marker_result, marker)
                         
-                        # Extract reference range from same line
-                        ref_match = self.ref_range_pattern.search(line)
+                        # FIRST: Extract reference range from same line (after the value)
+                        value_end_pos = match.end()
+                        line_after_value = line[value_end_pos:]
+                        
+                        # Try labeled pattern first (норма: X-Y)
+                        ref_match = self.ref_range_pattern_labeled.search(line_after_value)
                         if ref_match:
                             marker_result.reference_min = self._parse_float(ref_match.group("min"))
                             marker_result.reference_max = self._parse_float(ref_match.group("max"))
+                        else:
+                            # Try simple range pattern (X - Y at end)
+                            ref_match = self.ref_range_pattern_simple.search(line_after_value)
+                            if ref_match:
+                                ref_min = self._parse_float(ref_match.group("min"))
+                                ref_max = self._parse_float(ref_match.group("max"))
+                                # Sanity check: reference range should be plausible
+                                if ref_min is not None and ref_max is not None and ref_min < ref_max:
+                                    marker_result.reference_min = ref_min
+                                    marker_result.reference_max = ref_max
+                            else:
+                                # Try single bound (< X or > X)
+                                single_match = self.ref_range_pattern_single.search(line_after_value)
+                                if single_match:
+                                    op = single_match.group("op")
+                                    val = self._parse_float(single_match.group("val"))
+                                    if val is not None:
+                                        if op in "<≤":
+                                            marker_result.reference_min = 0
+                                            marker_result.reference_max = val
+                                        elif op in ">≥":
+                                            marker_result.reference_min = val
+                                            marker_result.reference_max = val * 10  # Rough upper bound
+                        
+                        # THEN: Add defaults if not found in PDF, and calculate status
+                        self._add_reference_and_status(marker_result, marker)
                         
                         setattr(result, marker, marker_result)
         
@@ -444,29 +492,34 @@ class BloodNLPExtractor:
         return normalizations.get(unit, unit)
     
     def _add_reference_and_status(self, marker_result: MarkerResult, marker_key: str):
-        """Add reference range and calculate status."""
+        """Add reference range (from PDF first, fallback to defaults) and calculate status."""
+        # Only use defaults if PDF didn't provide reference ranges
         if marker_key in REFERENCE_RANGES:
             ref_min, ref_max, default_unit = REFERENCE_RANGES[marker_key]
             
+            # Use PDF-extracted refs if available, otherwise use defaults
             if marker_result.reference_min is None:
                 marker_result.reference_min = ref_min
             if marker_result.reference_max is None:
                 marker_result.reference_max = ref_max
             if marker_result.unit is None:
                 marker_result.unit = default_unit
-            
-            # Calculate status
-            if marker_result.value is not None:
-                if marker_result.value < marker_result.reference_min * 0.7:
-                    marker_result.status = "critical_low"
-                elif marker_result.value < marker_result.reference_min:
-                    marker_result.status = "low"
-                elif marker_result.value > marker_result.reference_max * 1.5:
-                    marker_result.status = "critical_high"
-                elif marker_result.value > marker_result.reference_max:
-                    marker_result.status = "high"
-                else:
-                    marker_result.status = "normal"
+        
+        # Calculate status based on reference range
+        if marker_result.value is not None and marker_result.reference_min is not None and marker_result.reference_max is not None:
+            if marker_result.value < marker_result.reference_min * 0.7:
+                marker_result.status = "critical_low"
+            elif marker_result.value < marker_result.reference_min:
+                marker_result.status = "low"
+            elif marker_result.value > marker_result.reference_max * 1.5:
+                marker_result.status = "critical_high"
+            elif marker_result.value > marker_result.reference_max:
+                marker_result.status = "high"
+            else:
+                marker_result.status = "normal"
+        elif marker_result.value is not None:
+            # No reference range - mark as unknown
+            marker_result.status = "unknown"
     
     def _extract_lab_name(self, text: str) -> Optional[str]:
         """Extract laboratory name from text."""

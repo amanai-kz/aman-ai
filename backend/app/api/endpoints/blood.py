@@ -219,9 +219,16 @@ async def extract_blood_nlp(
     normalized_text = normalize_text(raw_text)
     extraction_result = extract_blood_analysis(normalized_text)
     
-    # Debug: log marker count
+    # Debug: log marker count and reference ranges
     found_markers = [k for k, v in extraction_result["markers"].items() if v and isinstance(v, dict) and v.get("value") is not None]
     print(f"[DEBUG] Found {len(found_markers)} markers: {found_markers[:10]}")
+    
+    # Log markers with PDF-extracted references
+    for k, v in extraction_result["markers"].items():
+        if v and isinstance(v, dict) and v.get("value") is not None:
+            ref_min = v.get("reference_min")
+            ref_max = v.get("reference_max")
+            print(f"[DEBUG] {k}: value={v.get('value')}, unit={v.get('unit')}, ref={ref_min}-{ref_max}, status={v.get('status')}")
     
     saved = False
     if save_to_profile and patient_id != "unknown":
