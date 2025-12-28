@@ -313,11 +313,17 @@ export default function BloodAnalysisPage() {
     doc.text("Biomarker Analysis:", 20, parsedData ? 120 : 50)
     
     let yPos = parsedData ? 130 : 60
-    BIOMARKERS.forEach((marker) => {
-      doc.setFontSize(11)
-      doc.text(`${marker.name}: ${marker.value} ${marker.unit} (${marker.status})`, 20, yPos)
-      yPos += 10
-    })
+    if (nlpResult?.markers) {
+      Object.entries(nlpResult.markers)
+        .filter(([, data]) => data && typeof data === 'object' && data.value !== null)
+        .forEach(([key, data]) => {
+          const markerData = data as { value: number; unit: string; status: string }
+          const info = MARKER_INFO[key] || { name: key, desc: '' }
+          doc.setFontSize(11)
+          doc.text(`${info.name}: ${markerData.value} ${markerData.unit || ''} (${markerData.status || 'normal'})`, 20, yPos)
+          yPos += 10
+        })
+    }
     
     doc.save("AmanAI_Blood_Analysis_Report.pdf")
   }
