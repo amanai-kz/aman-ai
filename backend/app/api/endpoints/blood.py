@@ -46,7 +46,14 @@ def match_marker_name(name: str) -> Optional[str]:
         "холестерин общий": "cholesterol",
         "триглицериды": "triglycerides",
         "лпвп": "hdl",
+        "холестерин-лпвп": "hdl",
+        "хс-лпвп": "hdl",
         "лпнп": "ldl",
+        "холестерин-лпнп": "ldl",
+        "хс-лпнп": "ldl",
+        "хс лпнп": "ldl",
+        "холестерин не-лпвп": "vldl",
+        "не-лпвп": "vldl",
         "креатинин": "creatinine",
         "мочевина": "urea",
         "билирубин общий": "bilirubin_total",
@@ -61,6 +68,7 @@ def match_marker_name(name: str) -> Optional[str]:
         "ферритин": "ferritin",
         "натрий": "sodium",
         "калий": "potassium",
+        "хлор": "chloride",
         "кальций": "calcium",
         "магний": "magnesium",
         "фосфор": "phosphorus",
@@ -84,6 +92,10 @@ def match_marker_name(name: str) -> Optional[str]:
         "пролактин": "prolactin",
         "инсулин": "insulin",
         "мочевая кислота": "uric_acid",
+        "hba1c": "hba1c",
+        "гликированный": "hba1c",
+        "гликированный hb": "hba1c",
+        "гликированный гемоглобин": "hba1c",
     }
     
     for ru_name, marker_key in direct_mappings.items():

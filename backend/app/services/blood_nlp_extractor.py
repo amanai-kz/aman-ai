@@ -164,14 +164,14 @@ MARKER_ALIASES: Dict[str, List[str]] = {
     
     # Biochemistry
     "glucose": ["glucose", "glu", "глюкоза", "глюк.", "сахар крови", "қан қанты"],
-    "hba1c": ["hba1c", "a1c", "гликированный гемоглобин", "гликогемоглобин"],
+    "hba1c": ["hba1c", "a1c", "гликированный гемоглобин", "гликогемоглобин", "гликированный hb", "гликированный", "hba1c (гликированный"],
     "insulin": ["insulin", "инсулин"],
     
     # Lipids
     "cholesterol": ["cholesterol", "chol", "холестерин", "общий холестерин", "холестерол"],
-    "hdl": ["hdl", "hdl-c", "hdl cholesterol", "лпвп", "лпвп-холестерин", "хс-лпвп"],
-    "ldl": ["ldl", "ldl-c", "ldl cholesterol", "лпнп", "лпнп-холестерин", "хс-лпнп"],
-    "vldl": ["vldl", "лпонп"],
+    "hdl": ["hdl", "hdl-c", "hdl cholesterol", "лпвп", "лпвп-холестерин", "хс-лпвп", "холестерин-лпвп"],
+    "ldl": ["ldl", "ldl-c", "ldl cholesterol", "лпнп", "лпнп-холестерин", "хс-лпнп", "холестерин-лпнп", "хс лпнп"],
+    "vldl": ["vldl", "лпонп", "холестерин не-лпвп", "не-лпвп"],
     "triglycerides": ["triglycerides", "tg", "триглицериды", "триг."],
     
     # Liver
@@ -194,7 +194,7 @@ MARKER_ALIASES: Dict[str, List[str]] = {
     # Electrolytes
     "sodium": ["sodium", "na", "натрий"],
     "potassium": ["potassium", "k", "калий"],
-    "chloride": ["chloride", "cl", "хлор", "хлориды"],
+    "chloride": ["chloride", "cl", "хлор", "хлориды", "хлор na"],
     "calcium": ["calcium", "ca", "кальций"],
     "magnesium": ["magnesium", "mg", "магний"],
     "phosphorus": ["phosphorus", "phos", "p", "фосфор"],
