@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     backendFormData.append("patient_id", session.user.id || "unknown")
     backendFormData.append("save_to_profile", formData.get("save_to_profile")?.toString() || "false")
 
-    const response = await fetch(`${BACKEND_URL}/api/v1/blood/extract-nlp`, {
+    const response = await fetch(`${BACKEND_URL}/api/v1/services/blood/extract-nlp`, {
       method: "POST",
       body: backendFormData,
     })
