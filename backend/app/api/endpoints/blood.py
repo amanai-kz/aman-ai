@@ -156,6 +156,7 @@ class NLPExtractionResponse(BaseModel):
     labName: Optional[str] = None
     analysisDate: Optional[str] = None
     rawTextLength: int
+    rawTextPreview: Optional[str] = None  # First 1000 chars for debugging
     savedToProfile: bool = False
 
 
@@ -204,6 +205,11 @@ async def extract_blood_nlp(
     file_bytes = await file.read()
     raw_text = extract_text_from_pdf(file_bytes)
     
+    # Debug logging
+    print(f"[DEBUG] PDF size: {len(file_bytes)} bytes")
+    print(f"[DEBUG] Extracted text length: {len(raw_text)}")
+    print(f"[DEBUG] First 500 chars: {raw_text[:500]}")
+    
     if not raw_text.strip():
         raise HTTPException(
             status_code=422,
@@ -212,6 +218,10 @@ async def extract_blood_nlp(
 
     normalized_text = normalize_text(raw_text)
     extraction_result = extract_blood_analysis(normalized_text)
+    
+    # Debug: log marker count
+    found_markers = [k for k, v in extraction_result["markers"].items() if v and v.get("value")]
+    print(f"[DEBUG] Found {len(found_markers)} markers: {found_markers[:10]}")
     
     saved = False
     if save_to_profile and patient_id != "unknown":
@@ -226,6 +236,7 @@ async def extract_blood_nlp(
         labName=extraction_result.get("lab_name"),
         analysisDate=extraction_result.get("analysis_date"),
         rawTextLength=len(normalized_text),
+        rawTextPreview=normalized_text[:1000] if normalized_text else None,
         savedToProfile=saved,
     )
 
