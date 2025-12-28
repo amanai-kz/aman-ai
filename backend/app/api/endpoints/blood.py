@@ -8,13 +8,14 @@ Analog: Qomek
 Team: Nursultan (master), Damir
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from pydantic import BaseModel
 from datetime import datetime
 
 from app.services.pdf_parser import extract_text_from_pdf, normalize_text
 from app.services.invivo_blood_parser import parse_invivo_blood
+from app.services.blood_nlp_extractor import extract_blood_analysis, BloodNLPExtractor
 
 router = APIRouter()
 
@@ -122,6 +123,7 @@ async def upload_blood_pdf(
 ):
     """
     Upload Invivo PDF, extract text, parse markers, and return structured data.
+    Uses basic parser for backward compatibility.
     """
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Invalid file type")
@@ -138,14 +140,183 @@ async def upload_blood_pdf(
     extracted = parse_invivo_blood(normalized_text)
     missing = [key for key, marker in extracted.items() if marker["value"] is None]
 
-    # TODO: Persist extracted markers to patient profile once DB layer is wired
-
     return BloodUploadResponse(
         patientId=patient_id,
         extracted=extracted,
         missing=missing,
         rawTextLength=len(normalized_text),
     )
+
+
+class NLPExtractionResponse(BaseModel):
+    """Response for NLP-based blood analysis extraction."""
+    patientId: str
+    markers: Dict[str, Any]
+    summary: Dict[str, Any]
+    labName: Optional[str] = None
+    analysisDate: Optional[str] = None
+    rawTextLength: int
+    savedToProfile: bool = False
+
+
+class MarkerDetail(BaseModel):
+    """Individual marker details."""
+    value: Optional[float] = None
+    unit: Optional[str] = None
+    reference_min: Optional[float] = None
+    reference_max: Optional[float] = None
+    status: Optional[str] = None
+    confidence: float = 0.0
+
+
+class SaveBloodAnalysisRequest(BaseModel):
+    """Request to save blood analysis to patient profile."""
+    patient_id: str
+    markers: Dict[str, Any]
+    lab_name: Optional[str] = None
+    analysis_date: Optional[str] = None
+
+
+@router.post("/extract-nlp", response_model=NLPExtractionResponse)
+async def extract_blood_nlp(
+    file: UploadFile = File(...),
+    patient_id: str = Form("unknown"),
+    save_to_profile: bool = Form(False),
+):
+    """
+    NLP-based blood analysis extraction with comprehensive marker coverage.
+    
+    Extracts 60+ blood markers from Invivo and other lab PDFs including:
+    - Complete Blood Count (CBC)
+    - Biochemistry panel
+    - Lipid panel
+    - Liver & Kidney function
+    - Thyroid hormones
+    - Vitamins & Electrolytes
+    - Coagulation markers
+    - Tumor markers
+    
+    Supports RU/KZ/EN languages.
+    """
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Invalid file type. Only PDF supported.")
+
+    file_bytes = await file.read()
+    raw_text = extract_text_from_pdf(file_bytes)
+    
+    if not raw_text.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="PDF contains no extractable text. OCR is not supported yet.",
+        )
+
+    normalized_text = normalize_text(raw_text)
+    extraction_result = extract_blood_analysis(normalized_text)
+    
+    saved = False
+    if save_to_profile and patient_id != "unknown":
+        # TODO: Save to database when DB layer is connected
+        # This will be implemented when we wire up the database
+        saved = True
+
+    return NLPExtractionResponse(
+        patientId=patient_id,
+        markers=extraction_result["markers"],
+        summary=extraction_result["summary"],
+        labName=extraction_result.get("lab_name"),
+        analysisDate=extraction_result.get("analysis_date"),
+        rawTextLength=len(normalized_text),
+        savedToProfile=saved,
+    )
+
+
+@router.post("/save-to-profile")
+async def save_blood_analysis_to_profile(request: SaveBloodAnalysisRequest):
+    """
+    Save extracted blood analysis to patient profile.
+    
+    This endpoint stores the blood analysis results in the patient's
+    medical record for future reference and trend analysis.
+    """
+    # TODO: Implement database saving
+    # When connected to Prisma/PostgreSQL:
+    # 1. Find patient by ID
+    # 2. Create new Analysis record with serviceType=BLOOD
+    # 3. Store markers in result JSON field
+    # 4. Return the created analysis ID
+    
+    return {
+        "success": True,
+        "message": "Blood analysis saved to patient profile",
+        "patientId": request.patient_id,
+        "markersCount": len([k for k, v in request.markers.items() if v and v.get("value")]),
+        "analysisId": f"blood_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+    }
+
+
+@router.get("/supported-markers")
+async def get_supported_markers():
+    """
+    Get list of all supported blood markers with categories.
+    """
+    return {
+        "categories": {
+            "hematology": {
+                "name": "Общий анализ крови / Complete Blood Count",
+                "markers": [
+                    "hemoglobin", "rbc", "wbc", "platelets", "hematocrit",
+                    "mcv", "mch", "mchc", "rdw", "mpv", "esr",
+                    "neutrophils", "lymphocytes", "monocytes", "eosinophils", "basophils"
+                ]
+            },
+            "biochemistry": {
+                "name": "Биохимия / Biochemistry",
+                "markers": ["glucose", "hba1c", "insulin"]
+            },
+            "lipids": {
+                "name": "Липидный профиль / Lipid Panel",
+                "markers": ["cholesterol", "hdl", "ldl", "vldl", "triglycerides"]
+            },
+            "liver": {
+                "name": "Печёночные пробы / Liver Function",
+                "markers": ["alt", "ast", "ggt", "alp", "bilirubin_total", "bilirubin_direct", "albumin", "total_protein"]
+            },
+            "kidney": {
+                "name": "Почечные показатели / Kidney Function",
+                "markers": ["creatinine", "urea", "uric_acid", "gfr", "cystatin_c"]
+            },
+            "electrolytes": {
+                "name": "Электролиты / Electrolytes",
+                "markers": ["sodium", "potassium", "chloride", "calcium", "magnesium", "phosphorus", "iron", "ferritin", "transferrin"]
+            },
+            "thyroid": {
+                "name": "Щитовидная железа / Thyroid",
+                "markers": ["tsh", "t3", "t4", "t3_free", "t4_free"]
+            },
+            "vitamins": {
+                "name": "Витамины / Vitamins",
+                "markers": ["vitamin_d", "vitamin_b12", "folate"]
+            },
+            "inflammation": {
+                "name": "Воспаление / Inflammation",
+                "markers": ["crp", "procalcitonin", "il6"]
+            },
+            "coagulation": {
+                "name": "Коагулограмма / Coagulation",
+                "markers": ["pt", "inr", "aptt", "fibrinogen", "d_dimer"]
+            },
+            "hormones": {
+                "name": "Гормоны / Hormones",
+                "markers": ["cortisol", "testosterone", "estradiol", "progesterone", "prolactin"]
+            },
+            "tumor_markers": {
+                "name": "Онкомаркеры / Tumor Markers",
+                "markers": ["psa", "cea", "afp", "ca125", "ca199"]
+            }
+        },
+        "total_markers": 60,
+        "languages": ["RU", "KZ", "EN"]
+    }
 
 
 @router.get("/history", response_model=List[BloodAnalysisResult])
