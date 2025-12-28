@@ -13,11 +13,101 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from pydantic import BaseModel
 from datetime import datetime
 
-from app.services.pdf_parser import extract_text_from_pdf, normalize_text
+from app.services.pdf_parser import (
+    extract_text_from_pdf, 
+    normalize_text, 
+    extract_tables_from_pdf,
+    extract_lab_data_from_tables
+)
 from app.services.invivo_blood_parser import parse_invivo_blood
-from app.services.blood_nlp_extractor import extract_blood_analysis, BloodNLPExtractor
+from app.services.blood_nlp_extractor import extract_blood_analysis, BloodNLPExtractor, MARKER_ALIASES
 
 router = APIRouter()
+
+
+def match_marker_name(name: str) -> Optional[str]:
+    """Match a marker name from table to our standardized marker keys."""
+    name_lower = name.lower().strip()
+    
+    for marker_key, aliases in MARKER_ALIASES.items():
+        for alias in aliases:
+            if alias.lower() in name_lower or name_lower in alias.lower():
+                return marker_key
+    
+    # Direct mappings for common variations
+    direct_mappings = {
+        "гемоглобин": "hemoglobin",
+        "эритроциты": "rbc", 
+        "лейкоциты": "wbc",
+        "тромбоциты": "platelets",
+        "гематокрит": "hematocrit",
+        "глюкоза": "glucose",
+        "холестерин": "cholesterol",
+        "холестерин общий": "cholesterol",
+        "триглицериды": "triglycerides",
+        "лпвп": "hdl",
+        "лпнп": "ldl",
+        "креатинин": "creatinine",
+        "мочевина": "urea",
+        "билирубин общий": "bilirubin_total",
+        "билирубин прямой": "bilirubin_direct",
+        "общий белок": "total_protein",
+        "альбумин": "albumin",
+        "алт": "alt",
+        "аст": "ast",
+        "ггт": "ggt",
+        "щелочная фосфатаза": "alp",
+        "железо": "iron",
+        "ферритин": "ferritin",
+        "натрий": "sodium",
+        "калий": "potassium",
+        "кальций": "calcium",
+        "магний": "magnesium",
+        "фосфор": "phosphorus",
+        "ттг": "tsh",
+        "т4 свободный": "t4_free",
+        "св. т4": "t4_free",
+        "витамин d": "vitamin_d",
+        "витамин в12": "vitamin_b12",
+        "фолиевая кислота": "folate",
+        "с-реактивный белок": "crp",
+        "срб": "crp",
+        "соэ": "esr",
+        "нейтрофилы": "neutrophils",
+        "лимфоциты": "lymphocytes",
+        "моноциты": "monocytes",
+        "эозинофилы": "eosinophils",
+        "базофилы": "basophils",
+        "эстрадиол": "estradiol",
+        "тестостерон": "testosterone",
+        "кортизол": "cortisol",
+        "пролактин": "prolactin",
+        "инсулин": "insulin",
+        "мочевая кислота": "uric_acid",
+    }
+    
+    for ru_name, marker_key in direct_mappings.items():
+        if ru_name in name_lower:
+            return marker_key
+    
+    return None
+
+
+def calculate_status(value: float, ref_min: Optional[float], ref_max: Optional[float]) -> str:
+    """Calculate status based on value and reference range."""
+    if ref_min is None or ref_max is None:
+        return "unknown"
+    
+    if value < ref_min * 0.7:
+        return "critical_low"
+    elif value < ref_min:
+        return "low"
+    elif value > ref_max * 1.5:
+        return "critical_high"
+    elif value > ref_max:
+        return "high"
+    else:
+        return "normal"
 
 
 class BloodMarker(BaseModel):
@@ -203,14 +293,24 @@ async def extract_blood_nlp(
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDF supported.")
 
     file_bytes = await file.read()
-    raw_text = extract_text_from_pdf(file_bytes)
     
     # Debug logging
     print(f"[DEBUG] PDF size: {len(file_bytes)} bytes")
+    
+    # METHOD 1: Extract tables (more accurate for structured lab reports)
+    tables = extract_tables_from_pdf(file_bytes)
+    table_data = extract_lab_data_from_tables(tables)
+    print(f"[DEBUG] Found {len(tables)} tables, extracted {len(table_data)} lab rows")
+    
+    for item in table_data[:10]:
+        print(f"[DEBUG] TABLE: {item}")
+    
+    # METHOD 2: Extract text for NLP parsing
+    raw_text = extract_text_from_pdf(file_bytes)
     print(f"[DEBUG] Extracted text length: {len(raw_text)}")
     print(f"[DEBUG] First 500 chars: {raw_text[:500]}")
     
-    if not raw_text.strip():
+    if not raw_text.strip() and not table_data:
         raise HTTPException(
             status_code=422,
             detail="PDF contains no extractable text. OCR is not supported yet.",
@@ -219,9 +319,28 @@ async def extract_blood_nlp(
     normalized_text = normalize_text(raw_text)
     extraction_result = extract_blood_analysis(normalized_text)
     
+    # METHOD 3: Merge table data into extraction result
+    # Table data can provide better accuracy for values and reference ranges
+    for item in table_data:
+        marker_key = match_marker_name(item["name"])
+        if marker_key:
+            existing = extraction_result["markers"].get(marker_key)
+            # If not found in NLP or table has reference range
+            if not existing or (not existing.get("reference_min") and item.get("reference_min")):
+                extraction_result["markers"][marker_key] = {
+                    "value": item["value"],
+                    "unit": item.get("unit"),
+                    "reference_min": item.get("reference_min"),
+                    "reference_max": item.get("reference_max"),
+                    "status": calculate_status(item["value"], item.get("reference_min"), item.get("reference_max")),
+                    "confidence": 1.0,
+                    "raw_text": item["name"],
+                }
+                print(f"[DEBUG] Added from table: {marker_key} = {item['value']}")
+    
     # Debug: log marker count and reference ranges
     found_markers = [k for k, v in extraction_result["markers"].items() if v and isinstance(v, dict) and v.get("value") is not None]
-    print(f"[DEBUG] Found {len(found_markers)} markers: {found_markers[:10]}")
+    print(f"[DEBUG] Total found {len(found_markers)} markers: {found_markers[:15]}")
     
     # Log markers with PDF-extracted references
     for k, v in extraction_result["markers"].items():
