@@ -220,7 +220,7 @@ async def extract_blood_nlp(
     extraction_result = extract_blood_analysis(normalized_text)
     
     # Debug: log marker count
-    found_markers = [k for k, v in extraction_result["markers"].items() if v and v.get("value")]
+    found_markers = [k for k, v in extraction_result["markers"].items() if v and isinstance(v, dict) and v.get("value") is not None]
     print(f"[DEBUG] Found {len(found_markers)} markers: {found_markers[:10]}")
     
     saved = False
