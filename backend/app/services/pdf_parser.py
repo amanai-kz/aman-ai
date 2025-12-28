@@ -22,9 +22,15 @@ def extract_tables_from_pdf(file_bytes: bytes) -> List[List[List[str]]]:
     tables = []
     try:
         with pdfplumber.open(BytesIO(file_bytes)) as pdf:
-            for page in pdf.pages:
+            total_pages = len(pdf.pages)
+            print(f"[DEBUG] PDF has {total_pages} pages")
+            
+            for page_num, page in enumerate(pdf.pages, 1):
+                print(f"[DEBUG] Processing page {page_num}/{total_pages}")
                 page_tables = page.extract_tables() or []
-                for table in page_tables:
+                print(f"[DEBUG] Page {page_num}: found {len(page_tables)} tables")
+                
+                for table_idx, table in enumerate(page_tables):
                     if table:
                         # Clean up cells
                         cleaned_table = []
@@ -35,8 +41,13 @@ def extract_tables_from_pdf(file_bytes: bytes) -> List[List[List[str]]]:
                                     cleaned_table.append(cleaned_row)
                         if cleaned_table:
                             tables.append(cleaned_table)
+                            print(f"[DEBUG] Page {page_num}, Table {table_idx+1}: {len(cleaned_table)} rows")
     except Exception as e:
         print(f"[DEBUG] Table extraction error: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print(f"[DEBUG] Total tables extracted: {len(tables)}")
     return tables
 
 
@@ -133,29 +144,44 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
     text_parts: List[str] = []
     try:
         with pdfplumber.open(BytesIO(file_bytes)) as pdf:
-            for page in pdf.pages:
+            total_pages = len(pdf.pages)
+            print(f"[DEBUG] Text extraction: PDF has {total_pages} pages")
+            
+            for page_num, page in enumerate(pdf.pages, 1):
                 page_text = page.extract_text() or ""
+                text_len = len(page_text)
+                print(f"[DEBUG] Page {page_num}/{total_pages}: extracted {text_len} chars")
                 if page_text:
                     text_parts.append(page_text)
-    except Exception:
-        # Extraction errors should not break the fallback path
-        pass
+    except Exception as e:
+        print(f"[DEBUG] pdfplumber error: {e}")
+        import traceback
+        traceback.print_exc()
 
     extracted = "\n".join(text_parts).strip()
+    total_chars = len(extracted)
+    print(f"[DEBUG] pdfplumber total: {total_chars} chars from {len(text_parts)} pages")
+    
     if extracted or fitz is None:
         return extracted
 
+    # Fallback to PyMuPDF
+    print("[DEBUG] Trying PyMuPDF fallback...")
     fallback_parts: List[str] = []
     try:
         with fitz.open(stream=file_bytes, filetype="pdf") as doc:  # type: ignore
-            for page in doc:
+            for page_num, page in enumerate(doc, 1):
                 page_text = page.get_text("text") or ""
+                print(f"[DEBUG] PyMuPDF page {page_num}: {len(page_text)} chars")
                 if page_text:
                     fallback_parts.append(page_text)
-    except Exception:
+    except Exception as e:
+        print(f"[DEBUG] PyMuPDF error: {e}")
         return extracted
 
-    return "\n".join(fallback_parts).strip()
+    fallback_text = "\n".join(fallback_parts).strip()
+    print(f"[DEBUG] PyMuPDF total: {len(fallback_text)} chars")
+    return fallback_text
 
 
 def normalize_text(text: str) -> str:
