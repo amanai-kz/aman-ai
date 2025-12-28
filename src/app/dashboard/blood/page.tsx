@@ -119,18 +119,29 @@ const BIOMARKERS = [
   { name: 'Homocysteine', value: '11', unit: 'umol/L', status: 'Warning', ref: '< 10', desc: 'Cardio Health' },
 ]
 
+interface NLPResult {
+  markers: Record<string, { value: number | null; unit: string | null; status: string | null; confidence: number }>
+  summary: { found_markers: number; alerts: Array<{ marker: string; status: string; severity: string }>; critical_count: number; warning_count: number }
+  labName?: string
+  analysisDate?: string
+}
+
 export default function BloodAnalysisPage() {
   const [status, setStatus] = useState<'idle' | 'running' | 'complete' | 'error'>('idle')
   const [activeStep, setActiveStep] = useState(0)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [parsedData, setParsedData] = useState<Partial<BloodTestInput> | null>(null)
+  const [nlpResult, setNlpResult] = useState<NLPResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileUpload = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      setError('Пожалуйста, загрузите CSV файл')
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    const isCsv = file.name.toLowerCase().endsWith('.csv')
+    
+    if (!isPdf && !isCsv) {
+      setError('Пожалуйста, загрузите PDF или CSV файл')
       return
     }
 
@@ -138,20 +149,62 @@ export default function BloodAnalysisPage() {
     setError(null)
 
     try {
-      const content = await file.text()
-      const data = parseCSV(content)
-      
-      const requiredFields: (keyof BloodTestInput)[] = ['WBC', 'RBC', 'HGB', 'PLT']
-      const found = requiredFields.filter(f => data[f] !== undefined)
-      
-      if (found.length === 0) {
-        setError('Не найдены данные анализа крови. Убедитесь что CSV содержит колонки: WBC, RBC, HGB, PLT и др.')
-        return
-      }
+      if (isPdf) {
+        // Use NLP API for PDF extraction
+        setStatus('running')
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('patient_id', 'current_user') // TODO: Get from session
+        formData.append('save_to_profile', 'true')
+        
+        const response = await fetch('/api/blood/extract', {
+          method: 'POST',
+          body: formData,
+        })
+        
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Ошибка при обработке PDF')
+        }
+        
+        const result = await response.json()
+        
+        // Convert NLP result to our format
+        const extractedData: Partial<BloodTestInput> = {}
+        const markers = result.markers || {}
+        
+        if (markers.wbc?.value) extractedData.WBC = markers.wbc.value
+        if (markers.rbc?.value) extractedData.RBC = markers.rbc.value
+        if (markers.hemoglobin?.value) extractedData.HGB = markers.hemoglobin.value
+        if (markers.platelets?.value) extractedData.PLT = markers.platelets.value
+        if (markers.neutrophils?.value) extractedData.NEUT = markers.neutrophils.value
+        if (markers.lymphocytes?.value) extractedData.LYMPH = markers.lymphocytes.value
+        if (markers.monocytes?.value) extractedData.MONO = markers.monocytes.value
+        if (markers.eosinophils?.value) extractedData.EO = markers.eosinophils.value
+        if (markers.basophils?.value) extractedData.BASO = markers.basophils.value
+        
+        setParsedData(extractedData)
+        setNlpResult(result)
+        setStatus('complete')
+        
+      } else {
+        // CSV parsing (existing logic)
+        const content = await file.text()
+        const data = parseCSV(content)
+        
+        const requiredFields: (keyof BloodTestInput)[] = ['WBC', 'RBC', 'HGB', 'PLT']
+        const found = requiredFields.filter(f => data[f] !== undefined)
+        
+        if (found.length === 0) {
+          setError('Не найдены данные анализа крови. Убедитесь что CSV содержит колонки: WBC, RBC, HGB, PLT и др.')
+          return
+        }
 
-      setParsedData(data)
+        setParsedData(data)
+      }
     } catch (err) {
-      setError('Ошибка при чтении файла')
+      setError(err instanceof Error ? err.message : 'Ошибка при чтении файла')
+      setStatus('error')
     }
   }
 
@@ -201,6 +254,7 @@ export default function BloodAnalysisPage() {
     setStatus('idle')
     setUploadedFile(null)
     setParsedData(null)
+    setNlpResult(null)
     setError(null)
   }
 
@@ -306,13 +360,13 @@ export default function BloodAnalysisPage() {
                 </div>
                 <p className="font-medium mb-1">Загрузить результаты анализа крови</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  CSV файл с данными (WBC, RBC, HGB, PLT, NEUT, LYMPH и др.)
+                  PDF из Invivo/Олимп или CSV (60+ биомаркеров • RU/KZ/EN)
                 </p>
                 <input 
                   ref={fileInputRef}
                   type="file" 
                   className="hidden" 
-                  accept=".csv"
+                  accept=".pdf,.csv,application/pdf"
                   onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                 />
                 <span className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
