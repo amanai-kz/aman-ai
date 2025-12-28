@@ -278,10 +278,11 @@ class BloodNLPExtractor:
         
         for marker, aliases in MARKER_ALIASES.items():
             # Create pattern that matches any alias followed by value
+            # Allow up to 50 chars between alias and value (for text like "HbA1c (гликированный Hb) 5.6")
             alias_pattern = "|".join(re.escape(a) for a in aliases)
-            # Pattern: alias followed by optional colon/space, then number
+            # Pattern: alias, optional text in parens or other chars, then number
             pattern = re.compile(
-                rf"(?P<alias>{alias_pattern})\s*[:\-]?\s*(?P<value>\d+(?:[.,]\d+)?)\s*(?P<unit>[a-zа-яёµ%\^\d\*\/\.\-]+)?",
+                rf"(?P<alias>{alias_pattern})(?:\s*\([^)]*\))?\s*(?:NA\s*)?[:\-]?\s*(?P<value>\d+(?:[.,]\d+)?)\s*(?P<unit>[a-zа-яёµ%\^\d\*\/\.\-]+)?",
                 flags=re.IGNORECASE
             )
             self.alias_patterns[marker] = pattern

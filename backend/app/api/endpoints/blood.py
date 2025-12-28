@@ -322,6 +322,11 @@ async def extract_blood_nlp(
     print(f"[DEBUG] Extracted text length: {len(raw_text)}")
     print(f"[DEBUG] First 500 chars: {raw_text[:500]}")
     
+    # Print full text for debugging (first 3000 chars)
+    print(f"[DEBUG] === FULL TEXT (3000 chars) ===")
+    print(raw_text[:3000])
+    print(f"[DEBUG] === END FULL TEXT ===")
+    
     if not raw_text.strip() and not table_data:
         raise HTTPException(
             status_code=422,
