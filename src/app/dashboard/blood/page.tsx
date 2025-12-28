@@ -111,13 +111,39 @@ const parseCSV = (content: string): Partial<BloodTestInput> => {
   return data
 }
 
-const BIOMARKERS = [
-  { name: 'Hs-CRP', value: '3.5', unit: 'mg/L', status: 'High', ref: '< 2.0', desc: 'Inflammation Marker' },
-  { name: 'HbA1c', value: '5.7', unit: '%', status: 'Warning', ref: '< 5.7', desc: 'Blood Glucose Avg' },
-  { name: 'LDL-P', value: '1100', unit: 'nmol/L', status: 'Normal', ref: '< 1300', desc: 'Lipid Particle Count' },
-  { name: 'Vitamin D', value: '28', unit: 'ng/mL', status: 'Low', ref: '30-100', desc: 'Immune Support' },
-  { name: 'Homocysteine', value: '11', unit: 'umol/L', status: 'Warning', ref: '< 10', desc: 'Cardio Health' },
-]
+// Marker display names and descriptions
+const MARKER_INFO: Record<string, { name: string; desc: string }> = {
+  hemoglobin: { name: 'Гемоглобин', desc: 'Переносчик кислорода' },
+  rbc: { name: 'Эритроциты', desc: 'Красные кровяные тельца' },
+  wbc: { name: 'Лейкоциты', desc: 'Белые кровяные тельца' },
+  platelets: { name: 'Тромбоциты', desc: 'Свертываемость крови' },
+  hematocrit: { name: 'Гематокрит', desc: 'Объем эритроцитов' },
+  glucose: { name: 'Глюкоза', desc: 'Уровень сахара в крови' },
+  cholesterol: { name: 'Холестерин', desc: 'Общий холестерин' },
+  hdl: { name: 'ЛПВП', desc: '"Хороший" холестерин' },
+  ldl: { name: 'ЛПНП', desc: '"Плохой" холестерин' },
+  triglycerides: { name: 'Триглицериды', desc: 'Липидный профиль' },
+  alt: { name: 'АЛТ', desc: 'Функция печени' },
+  ast: { name: 'АСТ', desc: 'Функция печени' },
+  creatinine: { name: 'Креатинин', desc: 'Функция почек' },
+  urea: { name: 'Мочевина', desc: 'Функция почек' },
+  sodium: { name: 'Натрий', desc: 'Электролит' },
+  potassium: { name: 'Калий', desc: 'Электролит' },
+  calcium: { name: 'Кальций', desc: 'Электролит' },
+  iron: { name: 'Железо', desc: 'Метаболизм' },
+  ferritin: { name: 'Ферритин', desc: 'Запасы железа' },
+  tsh: { name: 'ТТГ', desc: 'Щитовидная железа' },
+  t4_free: { name: 'Св. Т4', desc: 'Щитовидная железа' },
+  vitamin_d: { name: 'Витамин D', desc: 'Иммунитет' },
+  vitamin_b12: { name: 'Витамин B12', desc: 'Нервная система' },
+  crp: { name: 'С-реактивный белок', desc: 'Воспаление' },
+  esr: { name: 'СОЭ', desc: 'Скорость оседания' },
+  neutrophils: { name: 'Нейтрофилы', desc: 'Лейкоцитарная формула' },
+  lymphocytes: { name: 'Лимфоциты', desc: 'Лейкоцитарная формула' },
+  estradiol: { name: 'Эстрадиол', desc: 'Гормон' },
+  testosterone: { name: 'Тестостерон', desc: 'Гормон' },
+  cortisol: { name: 'Кортизол', desc: 'Гормон стресса' },
+}
 
 interface NLPResult {
   markers: Record<string, { value: number | null; unit: string | null; status: string | null; confidence: number }>
@@ -502,49 +528,79 @@ export default function BloodAnalysisPage() {
                   <h3 className="text-lg font-medium">Клиническое заключение</h3>
                 </div>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  Обнаружены признаки воспалительного стресса (повышенный Hs-CRP). 
-                  В сочетании с низким уровнем витамина D это указывает на необходимость 
-                  модуляции иммунной системы. Остальные метаболические маркеры в норме.
+                  {nlpResult?.summary?.critical_count ? (
+                    `Обнаружено ${nlpResult.summary.critical_count} критичных показателей. `
+                  ) : ''}
+                  {nlpResult?.summary?.warning_count ? (
+                    `${nlpResult.summary.warning_count} показателей требуют внимания. `
+                  ) : ''}
+                  {!nlpResult?.summary?.critical_count && !nlpResult?.summary?.warning_count ? (
+                    'Все найденные показатели в пределах нормы.'
+                  ) : (
+                    'Рекомендуется консультация с врачом.'
+                  )}
                 </p>
                 <div className="flex gap-2">
+                  {nlpResult?.labName && (
+                    <span className="px-3 py-1 bg-muted text-muted-foreground text-xs font-medium rounded-lg">
+                      Лаборатория: {nlpResult.labName}
+                    </span>
+                  )}
                   <span className="px-3 py-1 bg-muted text-muted-foreground text-xs font-medium rounded-lg">
-                    Точность: 94%
-                  </span>
-                  <span className="px-3 py-1 bg-muted text-muted-foreground text-xs font-medium rounded-lg">
-                    52 биомаркера
+                    {nlpResult?.summary?.found_markers || 0} маркеров найдено
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Biomarkers */}
+            {/* Biomarkers from NLP */}
             <div className="grid gap-4">
-              {BIOMARKERS.map((marker, i) => (
-                <div key={i} className="group bg-background/60 backdrop-blur-sm p-6 rounded-2xl border hover:border-primary/50 transition-all flex flex-col md:flex-row gap-6 items-start md:items-center">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110 ${
-                    marker.status === 'Normal' ? 'bg-muted text-muted-foreground' : 'bg-red-500/10 text-red-500'
-                  }`}>
-                    {marker.status === 'Normal' ? <CheckCircle2 className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
-                  </div>
+              {nlpResult && Object.entries(nlpResult.markers)
+                .filter(([, data]) => data && typeof data === 'object' && data.value !== null)
+                .map(([key, data]) => {
+                  const markerData = data as { value: number; unit: string; status: string; reference_min?: number; reference_max?: number }
+                  const info = MARKER_INFO[key] || { name: key, desc: '' }
+                  const status = markerData.status || 'normal'
+                  const refRange = markerData.reference_min !== undefined && markerData.reference_max !== undefined 
+                    ? `${markerData.reference_min} - ${markerData.reference_max}`
+                    : '-'
+                  
+                  return (
+                    <div key={key} className="group bg-background/60 backdrop-blur-sm p-6 rounded-2xl border hover:border-primary/50 transition-all flex flex-col md:flex-row gap-6 items-start md:items-center">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110 ${
+                        status === 'normal' ? 'bg-muted text-muted-foreground' : 'bg-red-500/10 text-red-500'
+                      }`}>
+                        {status === 'normal' ? <CheckCircle2 className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
+                      </div>
 
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium mb-1">{marker.name}</h3>
-                    <p className="text-muted-foreground text-sm mb-3">{marker.desc}</p>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="px-3 py-1 bg-muted text-muted-foreground text-xs font-medium rounded-lg">
-                        Значение: {marker.value} {marker.unit}
-                      </span>
-                      <span className="px-3 py-1 bg-muted text-muted-foreground text-xs font-medium rounded-lg">
-                        Норма: {marker.ref}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium mb-1">{info.name}</h3>
+                        <p className="text-muted-foreground text-sm mb-3">{info.desc}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="px-3 py-1 bg-muted text-muted-foreground text-xs font-medium rounded-lg">
+                            Значение: {markerData.value} {markerData.unit || ''}
+                          </span>
+                          <span className="px-3 py-1 bg-muted text-muted-foreground text-xs font-medium rounded-lg">
+                            Норма: {refRange}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className={`px-3 py-1 border text-xs font-bold rounded-full ${getStatusBadgeStyles(status === 'normal' ? 'Normal' : status === 'high' ? 'High' : status === 'low' ? 'Low' : 'Warning')}`}>
+                        {status === 'normal' ? 'Норма' : status === 'high' ? 'Высокий' : status === 'low' ? 'Низкий' : status === 'critical' ? 'Критичный' : 'Внимание'}
                       </span>
                     </div>
-                  </div>
-
-                  <span className={`px-3 py-1 border text-xs font-bold rounded-full ${getStatusBadgeStyles(marker.status)}`}>
-                    {marker.status === 'Normal' ? 'Норма' : marker.status === 'High' ? 'Высокий' : marker.status === 'Low' ? 'Низкий' : 'Внимание'}
-                  </span>
+                  )
+                })}
+              
+              {/* Fallback if no NLP data */}
+              {(!nlpResult || Object.keys(nlpResult.markers).filter(k => nlpResult.markers[k]?.value !== null).length === 0) && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>Маркеры не найдены в документе</p>
+                  <p className="text-sm mt-2">Попробуйте загрузить другой PDF файл</p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         )}
