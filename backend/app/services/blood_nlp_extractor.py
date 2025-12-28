@@ -192,9 +192,9 @@ MARKER_ALIASES: Dict[str, List[str]] = {
     "cystatin_c": ["cystatin c", "cystatin", "цистатин с", "цистатин"],
     
     # Electrolytes
-    "sodium": ["sodium", "na", "натрий"],
+    "sodium": ["sodium", "натрий"],  # Removed "na" - conflicts with "Хлор NA"
     "potassium": ["potassium", "k", "калий"],
-    "chloride": ["chloride", "cl", "хлор", "хлориды", "хлор na"],
+    "chloride": ["chloride", "cl", "хлор", "хлориды"],
     "calcium": ["calcium", "ca", "кальций"],
     "magnesium": ["magnesium", "mg", "магний"],
     "phosphorus": ["phosphorus", "phos", "p", "фосфор"],
@@ -278,11 +278,11 @@ class BloodNLPExtractor:
         
         for marker, aliases in MARKER_ALIASES.items():
             # Create pattern that matches any alias followed by value
-            # Allow up to 50 chars between alias and value (for text like "HbA1c (гликированный Hb) 5.6")
+            # Handles: "HbA1c (гликированный Hb) 5.6", "Хлор NA 105", "ЛПВП 1.08*"
             alias_pattern = "|".join(re.escape(a) for a in aliases)
-            # Pattern: alias, optional text in parens or other chars, then number
+            # Pattern: alias, optional text in parens, optional NA marker, then number with optional asterisk
             pattern = re.compile(
-                rf"(?P<alias>{alias_pattern})(?:\s*\([^)]*\))?\s*(?:NA\s*)?[:\-]?\s*(?P<value>\d+(?:[.,]\d+)?)\s*(?P<unit>[a-zа-яёµ%\^\d\*\/\.\-]+)?",
+                rf"(?P<alias>{alias_pattern})(?:\s*\([^)]*\))?(?:\s*NA)?\s*[:\-]?\s*(?P<value>\d+(?:[.,]\d+)?)(?P<asterisk>\*)?(?:\s*(?P<unit>[a-zа-яёµ%\^\d\/\.\-]+))?",
                 flags=re.IGNORECASE
             )
             self.alias_patterns[marker] = pattern
@@ -390,7 +390,8 @@ class BloodNLPExtractor:
                 match = pattern.search(line)
                 if match:
                     value = self._parse_float(match.group("value"))
-                    unit = match.group("unit") if match.lastgroup == "unit" else None
+                    unit = match.group("unit") if "unit" in match.groupdict() and match.group("unit") else None
+                    has_asterisk = match.group("asterisk") if "asterisk" in match.groupdict() else None
                     
                     if value is not None:
                         marker_result = MarkerResult(
@@ -399,6 +400,10 @@ class BloodNLPExtractor:
                             confidence=1.0,
                             raw_text=line
                         )
+                        
+                        # If asterisk present, mark as potentially abnormal
+                        if has_asterisk:
+                            marker_result.status = "warning"  # Will be recalculated if ref range found
                         
                         # FIRST: Extract reference range from same line (after the value)
                         value_end_pos = match.end()
@@ -420,7 +425,7 @@ class BloodNLPExtractor:
                                     marker_result.reference_min = ref_min
                                     marker_result.reference_max = ref_max
                             else:
-                                # Try single bound (< X or > X)
+                                # Try single bound (< X or > X) - also look for "уровень >X" pattern
                                 single_match = self.ref_range_pattern_single.search(line_after_value)
                                 if single_match:
                                     op = single_match.group("op")
@@ -432,6 +437,19 @@ class BloodNLPExtractor:
                                         elif op in ">≥":
                                             marker_result.reference_min = val
                                             marker_result.reference_max = val * 10  # Rough upper bound
+                                else:
+                                    # Try "уровень >X" or "уровень <X" pattern in comments
+                                    comment_ref = re.search(r"уровень\s*([<>≤≥])\s*(\d+(?:[.,]\d+)?)", line_after_value, re.IGNORECASE)
+                                    if comment_ref:
+                                        op = comment_ref.group(1)
+                                        val = self._parse_float(comment_ref.group(2))
+                                        if val is not None:
+                                            if op in "<≤":
+                                                marker_result.reference_min = 0
+                                                marker_result.reference_max = val
+                                            elif op in ">≥":
+                                                marker_result.reference_min = val
+                                                marker_result.reference_max = val * 10
                         
                         # THEN: Add defaults if not found in PDF, and calculate status
                         self._add_reference_and_status(marker_result, marker)
@@ -494,6 +512,9 @@ class BloodNLPExtractor:
     
     def _add_reference_and_status(self, marker_result: MarkerResult, marker_key: str):
         """Add reference range (from PDF first, fallback to defaults) and calculate status."""
+        # Remember if asterisk was present (indicates abnormal)
+        had_asterisk_warning = marker_result.status == "warning"
+        
         # Only use defaults if PDF didn't provide reference ranges
         if marker_key in REFERENCE_RANGES:
             ref_min, ref_max, default_unit = REFERENCE_RANGES[marker_key]
@@ -517,10 +538,11 @@ class BloodNLPExtractor:
             elif marker_result.value > marker_result.reference_max:
                 marker_result.status = "high"
             else:
-                marker_result.status = "normal"
+                # If asterisk was present but value seems normal, still mark as warning
+                marker_result.status = "warning" if had_asterisk_warning else "normal"
         elif marker_result.value is not None:
-            # No reference range - mark as unknown
-            marker_result.status = "unknown"
+            # No reference range - if asterisk present, it's warning, otherwise unknown
+            marker_result.status = "warning" if had_asterisk_warning else "unknown"
     
     def _extract_lab_name(self, text: str) -> Optional[str]:
         """Extract laboratory name from text."""
