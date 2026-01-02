@@ -306,47 +306,54 @@ export default function BloodAnalysisPage() {
   }
 
   const handleDownloadReport = async () => {
-    const { jsPDF } = await import('jspdf')
-    const doc = new jsPDF()
-    
-    doc.setFontSize(20)
-    doc.setTextColor(15, 23, 42)
-    doc.text("AI Blood Analysis Report", 20, 20)
-    
-    doc.setFontSize(10)
-    doc.setTextColor(100, 116, 139)
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 28)
-    
-    if (parsedData) {
-      doc.setFontSize(14)
-      doc.setTextColor(15, 23, 42)
-      doc.text("Загруженные данные:", 20, 45)
+    if (!nlpResult?.markers) return
+
+    try {
+      const { generateBloodTestPdf } = await import('@/lib/pdf-generator')
       
-      let yPos = 55
-      Object.entries(parsedData).forEach(([key, value]) => {
-        doc.setFontSize(11)
-        doc.text(`${key}: ${value}`, 20, yPos)
-        yPos += 8
-      })
-    }
-    
-    doc.setFontSize(14)
-    doc.text("Biomarker Analysis:", 20, parsedData ? 120 : 50)
-    
-    let yPos = parsedData ? 130 : 60
-    if (nlpResult?.markers) {
-      Object.entries(nlpResult.markers)
+      // Convert markers to BloodTestData array
+      const testData = Object.entries(nlpResult.markers)
         .filter(([, data]) => data && typeof data === 'object' && data.value !== null)
-        .forEach(([key, data]) => {
-          const markerData = data as { value: number; unit: string; status: string }
+        .map(([key, data]) => {
+          const markerData = data as { value: number; unit: string; status: string; reference_range?: string }
           const info = MARKER_INFO[key] || { name: key, desc: '' }
-          doc.setFontSize(11)
-          doc.text(`${info.name}: ${markerData.value} ${markerData.unit || ''} (${markerData.status || 'normal'})`, 20, yPos)
-          yPos += 10
+          
+          return {
+            markerName: info.name,
+            value: markerData.value,
+            unit: markerData.unit || '',
+            referenceRange: markerData.reference_range || 'N/A',
+            status: (markerData.status?.toLowerCase() as "normal" | "high" | "low" | "critical") || "normal",
+          }
         })
+
+      const patientInfo = {
+        name: undefined,
+        age: undefined,
+        testDate: nlpResult.analysisDate ? new Date(nlpResult.analysisDate) : new Date(),
+        labName: nlpResult.labName || 'Invivo',
+      }
+
+      const blob = await generateBloodTestPdf(
+        testData,
+        patientInfo,
+        { brandName: 'AMAN AI' },
+        (progress, status) => {
+          console.log(`PDF Progress: ${progress}% - ${status}`)
+        }
+      )
+
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const datePart = new Date().toISOString().split('T')[0]
+      link.href = url
+      link.download = `AMAN_AI_Blood_Analysis_${datePart}.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Error generating blood test PDF:', err)
+      alert('Не удалось создать PDF. Попробуйте позже.')
     }
-    
-    doc.save("AmanAI_Blood_Analysis_Report.pdf")
   }
 
   const getStatusBadgeStyles = (s: string) => {
