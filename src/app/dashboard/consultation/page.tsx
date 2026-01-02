@@ -13,11 +13,25 @@ import {
   CheckCircle2,
   Clock,
   Save,
-  Download
+  Download,
+  ClipboardList,
+  Eye,
+  Brain,
+  Calendar,
+  Users
 } from "lucide-react"
 import { DashboardBackground } from "@/components/dashboard-background"
 import { cn } from "@/lib/utils"
 import { generateConsultationPdf } from "@/lib/pdf-generator"
+import { RecordingAlerts } from "@/components/recording-alerts"
+import { 
+  SpeakerIdentification, 
+  DialogueWithSpeakers,
+  parseDialogueWithSpeakers,
+  autoDetectSpeakerRoles,
+  type SpeakerRole,
+  type DialogueLineWithSpeaker
+} from "@/components/speaker-identification"
 
 // WebSocket URL - через nginx прокси для HTTPS совместимости
 const WS_URL = typeof window !== "undefined" 
@@ -29,28 +43,35 @@ interface AnalysisResult {
   result: ReportFields
 }
 
+// SOAP Format fields
 interface ReportFields {
+  // SOAP Format
+  subjective?: string      // Patient's complaints, symptoms, history
+  objective?: string       // Provider's observations, vital signs
+  assessment?: string      // Diagnosis, clinical impressions
+  differentialDiagnosis?: string // Alternative diagnoses when mentioned
+  plan?: string           // Treatment plan, follow-up
+  
+  // Legacy fields
   generalCondition: string
   dialogueProtocol: string
   recommendations: string
   conclusion: string
 }
 
-interface DialogueLine {
-  speaker: "doctor" | "patient"
-  text: string
-}
-
-function parseDialogue(rawDialogue: string): DialogueLine[] {
-  const lines = rawDialogue.split("\n").filter(line => line.trim())
-  return lines.map(line => {
-    const isDoctor = line.startsWith("SPEAKER_00:")
-    const text = line.replace(/^SPEAKER_0[01]:\s*/, "").trim()
-    return {
-      speaker: isDoctor ? "doctor" : "patient",
-      text
+// Extract unique speakers from dialogue
+function extractSpeakers(rawDialogue: string): string[] {
+  const speakerSet = new Set<string>()
+  const lines = rawDialogue.split("\n")
+  
+  lines.forEach(line => {
+    const match = line.match(/^(SPEAKER_\d+):/)
+    if (match) {
+      speakerSet.add(match[1])
     }
   })
+  
+  return Array.from(speakerSet).sort()
 }
 
 export default function ConsultationPage() {
@@ -66,10 +87,19 @@ export default function ConsultationPage() {
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfError, setPdfError] = useState("")
   
+  // Speaker identification state
+  const [speakerLabels, setSpeakerLabels] = useState<Record<string, SpeakerRole>>({})
+  const [speakers, setSpeakers] = useState<string[]>([])
+  const [dialogueLines, setDialogueLines] = useState<DialogueLineWithSpeaker[]>([])
+  
+  // Recording interruption state
+  const [isPaused, setIsPaused] = useState(false)
+  
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const wsRef = useRef<WebSocket | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
   // Format time as MM:SS
   const formatTime = (seconds: number) => {
@@ -99,6 +129,10 @@ export default function ConsultationPage() {
       setError("")
       setResult(null)
       audioChunksRef.current = []
+      setSpeakerLabels({})
+      setSpeakers([])
+      setDialogueLines([])
+      setIsPaused(false)
       
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -108,6 +142,8 @@ export default function ConsultationPage() {
           sampleRate: 16000
         } 
       })
+      
+      streamRef.current = stream
 
       // Create MediaRecorder
       const mediaRecorder = new MediaRecorder(stream, {
@@ -127,6 +163,7 @@ export default function ConsultationPage() {
       mediaRecorder.onstop = () => {
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop())
+        streamRef.current = null
         
         // Create audio blob and send to WebSocket
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
@@ -147,6 +184,31 @@ export default function ConsultationPage() {
       setError("Не удалось получить доступ к микрофону. Разрешите доступ в настройках браузера.")
     }
   }
+
+  // Handle microphone lost
+  const handleMicrophoneLost = useCallback(() => {
+    setIsPaused(true)
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+
+  // Handle microphone restored
+  const handleMicrophoneRestored = useCallback(() => {
+    setIsPaused(false)
+    if (isRecording && !timerRef.current) {
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+    }
+  }, [isRecording])
+
+  // Handle interruption (phone call, etc.)
+  const handleInterruption = useCallback((type: "phone" | "audio_focus") => {
+    console.log("Recording interrupted:", type)
+    setIsPaused(true)
+  }, [])
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
@@ -173,8 +235,17 @@ export default function ConsultationPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          report: result.result,
-          recordingDuration: finalRecordingTime
+          report: {
+            ...result.result,
+            // Include SOAP format
+            subjective: result.result.subjective,
+            objective: result.result.objective,
+            assessment: result.result.assessment,
+            differentialDiagnosis: result.result.differentialDiagnosis,
+            plan: result.result.plan
+          },
+          recordingDuration: finalRecordingTime,
+          speakerLabels: speakerLabels
         })
       })
       
@@ -244,12 +315,35 @@ export default function ConsultationPage() {
         try {
           const data = JSON.parse(event.data)
           if (data.status === "completed" && data.result) {
+            const rawDialogue = data.result.dialogueProtocol ?? data.result.dialogue_protocol ?? data.result.raw_dialogue ?? ""
+            
             const normalizedResult: ReportFields = {
+              // SOAP format fields
+              subjective: data.result.subjective ?? "",
+              objective: data.result.objective ?? "",
+              assessment: data.result.assessment ?? "",
+              differentialDiagnosis: data.result.differentialDiagnosis ?? data.result.differential_diagnosis ?? "",
+              plan: data.result.plan ?? "",
+              
+              // Legacy fields
               generalCondition: data.result.generalCondition ?? data.result.general_condition ?? "",
-              dialogueProtocol: data.result.dialogueProtocol ?? data.result.dialogue_protocol ?? data.result.raw_dialogue ?? "",
+              dialogueProtocol: rawDialogue,
               recommendations: data.result.recommendations ?? "",
               conclusion: data.result.conclusion ?? ""
             }
+            
+            // Extract speakers and auto-detect roles
+            const detectedSpeakers = extractSpeakers(rawDialogue)
+            setSpeakers(detectedSpeakers)
+            
+            // Parse dialogue lines
+            const parsedLines = parseDialogueWithSpeakers(rawDialogue)
+            setDialogueLines(parsedLines)
+            
+            // Auto-detect speaker roles
+            const autoLabels = autoDetectSpeakerRoles(parsedLines)
+            setSpeakerLabels(autoLabels)
+            
             setResult({ status: data.status, result: normalizedResult })
             setIsProcessing(false)
             setWsStatus("disconnected")
@@ -283,27 +377,49 @@ export default function ConsultationPage() {
     }
   }, [])
 
-  const dialogueLines = result?.result?.dialogueProtocol 
-    ? parseDialogue(result.result.dialogueProtocol) 
-    : []
   const hasResultContent = !!(
     result?.result?.conclusion ||
     result?.result?.generalCondition ||
     result?.result?.recommendations ||
-    result?.result?.dialogueProtocol
+    result?.result?.dialogueProtocol ||
+    result?.result?.subjective ||
+    result?.result?.objective ||
+    result?.result?.assessment ||
+    result?.result?.plan
   )
   const isPdfDisabled = !hasResultContent || pdfLoading
+  
+  // Check if SOAP format is available
+  const hasSOAPFormat = !!(
+    result?.result?.subjective ||
+    result?.result?.objective ||
+    result?.result?.assessment ||
+    result?.result?.plan
+  )
+  
+  // Handle speaker label change
+  const handleSpeakerLabelChange = (speakerId: string, role: SpeakerRole) => {
+    setSpeakerLabels(prev => ({ ...prev, [speakerId]: role }))
+  }
 
   return (
     <div className="min-h-screen relative">
       <DashboardBackground />
+      
+      {/* Recording Alerts (Microphone Lost / Phone Interruption) */}
+      <RecordingAlerts
+        isRecording={isRecording}
+        onMicrophoneLost={handleMicrophoneLost}
+        onMicrophoneRestored={handleMicrophoneRestored}
+        onInterruption={handleInterruption}
+      />
       
       <div className="relative z-10 p-6 lg:p-10">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">🩺 Запись консультации</h1>
           <p className="text-muted-foreground">
-            Записывайте разговор с пациентом — AI автоматически расшифрует и создаст структурированное заключение
+            Записывайте разговор с пациентом — AI автоматически расшифрует и создаст структурированное заключение (SOAP формат)
           </p>
         </div>
 
@@ -314,10 +430,16 @@ export default function ConsultationPage() {
               
               {/* Status */}
               <div className="text-center mb-8 h-8">
-                {isRecording && (
+                {isRecording && !isPaused && (
                   <div className="flex items-center gap-2 text-red-500 animate-pulse">
                     <div className="w-3 h-3 rounded-full bg-red-500 animate-ping" />
                     <span className="text-lg font-medium">Запись: {formatTime(recordingTime)}</span>
+                  </div>
+                )}
+                {isRecording && isPaused && (
+                  <div className="flex items-center gap-2 text-amber-500">
+                    <div className="w-3 h-3 rounded-full bg-amber-500" />
+                    <span className="text-lg font-medium">Приостановлено: {formatTime(recordingTime)}</span>
                   </div>
                 )}
                 {isProcessing && (
@@ -390,84 +512,160 @@ export default function ConsultationPage() {
           {result && result.result && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               
-              {/* Conclusion Card - Highlighted */}
-              <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 backdrop-blur-sm rounded-2xl border border-emerald-500/20 p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                    <Stethoscope className="w-5 h-5 text-emerald-500" />
+              {/* Speaker Identification - only show if we have multiple speakers */}
+              {speakers.length > 1 && (
+                <SpeakerIdentification
+                  speakers={speakers}
+                  speakerLabels={speakerLabels}
+                  onLabelChange={handleSpeakerLabelChange}
+                  dialogueLines={dialogueLines}
+                />
+              )}
+              
+              {/* SOAP Format Sections */}
+              {hasSOAPFormat ? (
+                <>
+                  {/* Subjective - Patient's complaints */}
+                  {result.result.subjective && (
+                    <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                          <User className="w-4 h-4 text-blue-400" />
+                        </div>
+                        <div>
+                          <h3 className="font-medium">Subjective (S)</h3>
+                          <p className="text-xs text-muted-foreground">Жалобы пациента</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{result.result.subjective}</p>
+                    </div>
+                  )}
+
+                  {/* Objective - Provider's observations */}
+                  {result.result.objective && (
+                    <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                          <Eye className="w-4 h-4 text-emerald-400" />
+                        </div>
+                        <div>
+                          <h3 className="font-medium">Objective (O)</h3>
+                          <p className="text-xs text-muted-foreground">Объективные данные</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{result.result.objective}</p>
+                    </div>
+                  )}
+
+                  {/* Assessment - Diagnosis */}
+                  <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 backdrop-blur-sm rounded-2xl border border-emerald-500/20 p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                        <Brain className="w-5 h-5 text-emerald-500" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-semibold">Assessment (A)</h2>
+                        <p className="text-xs text-muted-foreground">Оценка / Диагноз</p>
+                      </div>
+                    </div>
+                    <p className="text-lg font-medium text-emerald-400">
+                      {result.result.assessment || result.result.conclusion}
+                    </p>
+                    
+                    {/* Differential Diagnosis - when mentioned */}
+                    {result.result.differentialDiagnosis && (
+                      <div className="mt-4 pt-4 border-t border-emerald-500/20">
+                        <p className="text-sm text-muted-foreground mb-2">
+                          <strong className="text-amber-400">Дифференциальный диагноз:</strong>
+                        </p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                          {result.result.differentialDiagnosis}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <h2 className="text-xl font-semibold">Заключение</h2>
-                </div>
-                <p className="text-lg font-medium text-emerald-400">{result.result.conclusion}</p>
-              </div>
 
-
-              {/* General Condition */}
-              <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                    <Activity className="w-4 h-4 text-blue-400" />
+                  {/* Plan - Treatment plan */}
+                  <div className="bg-gradient-to-br from-amber-500/10 to-yellow-500/10 backdrop-blur-sm rounded-2xl border border-amber-500/20 p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                        <ClipboardList className="w-5 h-5 text-amber-500" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-semibold">Plan (P)</h2>
+                        <p className="text-xs text-muted-foreground">План лечения</p>
+                      </div>
+                    </div>
+                    <p className="text-muted-foreground whitespace-pre-wrap">
+                      {result.result.plan || result.result.recommendations}
+                    </p>
                   </div>
-                  <h3 className="font-medium">Жалпы жағдай / Общее состояние</h3>
-                </div>
-                <p className="text-sm text-muted-foreground">{result.result.generalCondition}</p>
-              </div>
-
-              {/* Recommendations */}
-              <div className="bg-gradient-to-br from-amber-500/10 to-yellow-500/10 backdrop-blur-sm rounded-2xl border border-amber-500/20 p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-amber-500" />
+                </>
+              ) : (
+                <>
+                  {/* Legacy Format - Conclusion Card */}
+                  <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 backdrop-blur-sm rounded-2xl border border-emerald-500/20 p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                        <Stethoscope className="w-5 h-5 text-emerald-500" />
+                      </div>
+                      <h2 className="text-xl font-semibold">Заключение</h2>
+                    </div>
+                    <p className="text-lg font-medium text-emerald-400">{result.result.conclusion}</p>
                   </div>
-                  <h2 className="text-xl font-semibold">Рекомендации</h2>
-                </div>
-                <p className="text-muted-foreground">{result.result.recommendations}</p>
-              </div>
 
-              {/* Dialogue */}
+                  {/* General Condition */}
+                  {result.result.generalCondition && (
+                    <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-5">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                          <Activity className="w-4 h-4 text-blue-400" />
+                        </div>
+                        <h3 className="font-medium">Жалпы жағдай / Общее состояние</h3>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{result.result.generalCondition}</p>
+                    </div>
+                  )}
+
+                  {/* Recommendations */}
+                  {result.result.recommendations && (
+                    <div className="bg-gradient-to-br from-amber-500/10 to-yellow-500/10 backdrop-blur-sm rounded-2xl border border-amber-500/20 p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-amber-500" />
+                        </div>
+                        <h2 className="text-xl font-semibold">Рекомендации</h2>
+                      </div>
+                      <p className="text-muted-foreground">{result.result.recommendations}</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Dialogue with Speaker Identification */}
               <div className="bg-background/60 backdrop-blur-sm rounded-2xl border p-6">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-purple-400" />
+                    <Users className="w-5 h-5 text-purple-400" />
                   </div>
-                  <h2 className="text-xl font-semibold">Расшифровка диалога</h2>
+                  <div>
+                    <h2 className="text-xl font-semibold">Расшифровка диалога</h2>
+                    <p className="text-xs text-muted-foreground">
+                      {speakers.length > 0 && `${speakers.length} участник(ов) обнаружено`}
+                    </p>
+                  </div>
                 </div>
                 
-                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-                  {dialogueLines.map((line, index) => (
-                    <div 
-                      key={index}
-                      className={cn(
-                        "flex gap-3 animate-in fade-in slide-in-from-bottom-2",
-                        line.speaker === "doctor" ? "flex-row" : "flex-row-reverse"
-                      )}
-                      style={{ animationDelay: `${index * 50}ms` }}
-                    >
-                      <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                        line.speaker === "doctor" 
-                          ? "bg-emerald-500/20" 
-                          : "bg-blue-500/20"
-                      )}>
-                        {line.speaker === "doctor" 
-                          ? <Stethoscope className="w-4 h-4 text-emerald-400" />
-                          : <User className="w-4 h-4 text-blue-400" />
-                        }
-                      </div>
-                      <div className={cn(
-                        "max-w-[80%] rounded-2xl px-4 py-3",
-                        line.speaker === "doctor"
-                          ? "bg-emerald-500/10 rounded-tl-sm"
-                          : "bg-blue-500/10 rounded-tr-sm"
-                      )}>
-                        <p className="text-xs text-muted-foreground mb-1">
-                          {line.speaker === "doctor" ? "Врач" : "Пациент"}
-                        </p>
-                        <p className="text-sm">{line.text}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {dialogueLines.length > 0 ? (
+                  <DialogueWithSpeakers
+                    lines={dialogueLines}
+                    speakerLabels={speakerLabels}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    Диалог не обнаружен
+                  </p>
+                )}
               </div>
 
               {/* Action Buttons */}

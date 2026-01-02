@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
       result, 
       report,
       recordingDuration,
-      patientName 
+      patientName,
+      speakerLabels 
     } = body
 
     const payload = report || result
@@ -30,10 +31,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No result data provided" }, { status: 400 })
     }
 
+    // SOAP format fields
+    const subjective = payload.subjective ?? null
+    const objective = payload.objective ?? null
+    const assessment = payload.assessment ?? null
+    const differentialDiagnosis = payload.differentialDiagnosis ?? payload.differential_diagnosis ?? null
+    const plan = payload.plan ?? null
+    
+    // Legacy fields
     const generalCondition = payload.generalCondition ?? payload.general_condition ?? null
     const dialogueProtocol = payload.dialogueProtocol ?? payload.dialogue_protocol ?? payload.raw_dialogue ?? null
     const recommendations = payload.recommendations ?? null
     const conclusion = payload.conclusion ?? null
+    
+    // Speaker labels (JSON)
+    const speakerLabelsJson = speakerLabels ? JSON.stringify(speakerLabels) : null
 
     // Get patient ID if user is a patient
     let patientId = null
@@ -55,7 +67,7 @@ export async function POST(req: NextRequest) {
       year: "numeric" 
     })}`
 
-    // Insert consultation report
+    // Insert consultation report with SOAP format
     const insertResult = await pool.query(
       `INSERT INTO consultation_reports (
         id,
@@ -63,10 +75,16 @@ export async function POST(req: NextRequest) {
         patient_name,
         recording_duration,
         title,
+        subjective,
+        objective,
+        assessment,
+        differential_diagnosis,
+        plan,
         general_condition,
         conclusion,
         recommendations,
         raw_dialogue,
+        speaker_labels,
         created_at
       ) VALUES (
         gen_random_uuid(),
@@ -78,6 +96,12 @@ export async function POST(req: NextRequest) {
         $6,
         $7,
         $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        $13,
+        $14,
         NOW()
       ) RETURNING id, title, created_at as "createdAt"`,
       [
@@ -85,10 +109,16 @@ export async function POST(req: NextRequest) {
         patientName || session.user.name || "Пациент",
         recordingDuration || null,
         title,
+        subjective,
+        objective,
+        assessment,
+        differentialDiagnosis,
+        plan,
         generalCondition,
         conclusion,
         recommendations,
-        dialogueProtocol
+        dialogueProtocol,
+        speakerLabelsJson
       ]
     )
 
@@ -119,10 +149,16 @@ export async function GET(req: NextRequest) {
         patient_name as "patientName",
         recording_duration as "recordingDuration",
         title,
+        subjective,
+        objective,
+        assessment,
+        differential_diagnosis as "differentialDiagnosis",
+        plan,
         general_condition as "generalCondition",
         conclusion,
         recommendations,
         raw_dialogue as "dialogueProtocol",
+        speaker_labels as "speakerLabels",
         created_at as "createdAt"
       FROM consultation_reports
     `

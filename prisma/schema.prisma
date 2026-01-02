@@ -376,7 +376,14 @@ model ConsultationReport {
   // AI-Analyzed Content
   title             String   @db.VarChar(255)
   
-  // Structured data from AI analysis
+  // SOAP Format (Subjective, Objective, Assessment, Plan)
+  subjective        String?  @db.Text  // Patient's complaints, history, symptoms
+  objective         String?  @db.Text  // Provider's observations, vital signs, exam findings
+  assessment        String?  @db.Text  // Diagnosis and clinical impressions
+  differentialDiagnosis String? @db.Text @map("differential_diagnosis") // When mentioned during encounter
+  plan              String?  @db.Text  // Treatment plan, medications, follow-up
+  
+  // Legacy fields (for backwards compatibility)
   generalCondition  String?  @db.Text @map("general_condition")
   sleep             String?  @db.Text
   mood              String?  @db.Text
@@ -385,8 +392,11 @@ model ConsultationReport {
   conclusion        String?  @db.Text
   recommendations   String?  @db.Text
   
-  // Raw dialogue
+  // Raw dialogue with speaker labels
   rawDialogue       String?  @db.Text @map("raw_dialogue")
+  
+  // Speaker diarization data (Provider, Patient, Other)
+  speakerLabels     Json?    @map("speaker_labels") // {speakerId: "Provider"|"Patient"|"Other"}
   
   // Metadata
   createdAt         DateTime @default(now()) @map("created_at")
