@@ -1,25 +1,26 @@
 """
 Aman AI Platform - FastAPI Backend
-==================================
-Main application entry point
+Main application entry point.
 """
 
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
 from app.api.router import api_router
+from app.core.config import settings
+from app.db import init_db, shutdown_db
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan events"""
-    # Startup
-    print(f"🚀 Starting Aman AI Backend v{settings.VERSION}")
+    """Application lifespan events."""
+    print(f"Starting Aman AI Backend v{settings.VERSION}")
+    await init_db()
     yield
-    # Shutdown
-    print("👋 Shutting down Aman AI Backend")
+    await shutdown_db()
+    print("Shutting down Aman AI Backend")
 
 
 app = FastAPI(
@@ -47,7 +48,7 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint."""
     return {
         "status": "healthy",
         "version": settings.VERSION,
@@ -57,11 +58,9 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint."""
     return {
         "message": "Welcome to Aman AI Platform API",
         "docs": f"{settings.API_V1_STR}/docs",
         "version": settings.VERSION,
     }
-
-

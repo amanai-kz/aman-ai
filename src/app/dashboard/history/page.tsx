@@ -15,9 +15,12 @@ import {
   HeartPulse,
   Scan,
   ClipboardList,
+  Stethoscope,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { computeDurationSeconds, formatDuration } from "@/lib/duration"
+import { headers } from "next/headers"
 
 const serviceIcons: Record<string, React.ElementType> = {
   CT_MRI: Scan,
@@ -26,10 +29,31 @@ const serviceIcons: Record<string, React.ElementType> = {
   GENETICS: Dna,
   BLOOD: Droplets,
   REHABILITATION: HeartPulse,
+  CONSULTATION: Stethoscope,
 }
 
-// Mock data for demo
-const mockHistory = [
+type ConsultationApiReport = {
+  id: string
+  title: string
+  createdAt: string
+  recordingDuration: number | null
+  conclusion?: string | null
+  recommendations?: string | null
+}
+
+type HistoryItem = {
+  id: string
+  type: string
+  title: string
+  description: string
+  date: Date
+  status: string
+  result?: Record<string, unknown>
+  durationSeconds?: number | null
+}
+
+// Mock data fallback
+const mockHistory: HistoryItem[] = [
   {
     id: "1",
     type: "QUESTIONNAIRE",
@@ -63,8 +87,47 @@ export default async function HistoryPage() {
   const session = await auth()
   if (!session) redirect("/login")
 
-  // In real app, fetch from database
-  const history = mockHistory
+  let consultationReports: ConsultationApiReport[] = []
+
+  try {
+    const host = headers().get("host")
+    const proto = headers().get("x-forwarded-proto") ?? "http"
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || (host ? `${proto}://${host}` : "")
+    const apiUrl = baseUrl ? new URL("/api/consultation", baseUrl).toString() : "/api/consultation"
+
+    const res = await fetch(apiUrl, {
+      cache: "no-store",
+      next: { revalidate: 0 },
+    })
+    if (res.ok) {
+      const data = await res.json()
+      consultationReports = data.reports || []
+    }
+  } catch (error) {
+    console.error("Failed to load consultation history", error)
+  }
+
+  const consultationHistory: HistoryItem[] = consultationReports.map((report) => {
+    const durationSeconds = computeDurationSeconds(
+      report.createdAt,
+      null,
+      report.recordingDuration ?? null
+    )
+
+    return {
+      id: report.id,
+      type: "CONSULTATION",
+      title: report.title || "Консультация",
+      description: report.conclusion || report.recommendations || "Итог консультации",
+      date: new Date(report.createdAt),
+      status: "completed",
+      durationSeconds,
+    }
+  })
+
+  const history = [...consultationHistory, ...mockHistory].sort(
+    (a, b) => b.date.getTime() - a.date.getTime()
+  )
 
   return (
     <>
@@ -131,6 +194,9 @@ export default async function HistoryPage() {
                           
                           {/* Results preview */}
                           <div className="mt-3 flex flex-wrap gap-2">
+                            {item.type === "CONSULTATION" && (
+                              <ResultChip label="Длительность" value={formatDuration(item.durationSeconds ?? null)} />
+                            )}
                             {item.type === "QUESTIONNAIRE" && item.result && (
                               <>
                                 <ResultChip label="Балл" value={String(item.result.score ?? "—")} />
@@ -231,4 +297,3 @@ function formatDate(date: Date): string {
   
   return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })
 }
-

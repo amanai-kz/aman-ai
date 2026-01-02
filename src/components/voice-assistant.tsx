@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { Mic, MicOff, Volume2, Loader2, MessageSquare } from "lucide-react"
+import { buildMessagesWithContext, loadSessionContext } from "@/lib/session-context"
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -36,15 +38,23 @@ declare global {
 }
 
 export default function VoiceAssistantPage() {
+  const { data: session } = useSession()
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [messages, setMessages] = useState<Array<{ role: "user" | "ai"; text: string }>>([])
   const [error, setError] = useState("")
   const [isSupported, setIsSupported] = useState(true)
+  const [sessionContext, setSessionContext] = useState("")
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    setSessionContext(loadSessionContext(session.user.id))
+  }, [session?.user?.id])
 
   useEffect(() => {
     // Check if Web Speech API is supported
@@ -115,11 +125,24 @@ export default function VoiceAssistantPage() {
   const processWithAI = async (text: string) => {
     setIsProcessing(true)
     try {
-      // Отправляем в AI чат
+      const latestContext = session?.user?.id ? loadSessionContext(session.user.id) : sessionContext
+      if (session?.user?.id) {
+        setSessionContext(latestContext)
+      }
+
+      const history = [...messages, { role: "user" as const, text }]
+      const payloadMessages = buildMessagesWithContext(
+        history.map((message) => ({
+          role: message.role === "ai" ? "assistant" : "user",
+          content: message.text,
+        })),
+        latestContext
+      )
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ messages: payloadMessages, sessionContext: latestContext }),
       })
 
       if (!response.ok) throw new Error("AI error")
@@ -129,7 +152,7 @@ export default function VoiceAssistantPage() {
       
       setMessages(prev => [...prev, { role: "ai", text: aiResponse }])
       
-      // Озвучиваем ответ через Web Speech API (бесплатно)
+      // Play the assistant reply through the Web Speech API
       speakResponse(aiResponse)
     } catch (err) {
       console.error("AI processing error:", err)

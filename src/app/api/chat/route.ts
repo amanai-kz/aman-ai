@@ -33,7 +33,28 @@ const SYSTEM_PROMPT = `Ты AI-ассистент платформы Aman AI. Am
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json()
+    const body = await req.json()
+    const sessionContext = typeof body.sessionContext === "string" ? body.sessionContext.trim() : ""
+    const incomingMessages = Array.isArray(body.messages)
+      ? body.messages
+      : body.message
+        ? [{ role: "user", content: body.message }]
+        : []
+    const isContextMessage = (message: { role?: string; content?: string }) =>
+      message?.role === "system" &&
+      typeof message.content === "string" &&
+      message.content.startsWith("Session context:")
+
+    const hasContextMessage = incomingMessages.some(isContextMessage)
+    const contextMessages = hasContextMessage
+      ? incomingMessages.filter(isContextMessage)
+      : sessionContext
+        ? [{ role: "system", content: `Session context: ${sessionContext}` }]
+        : []
+
+    const trimmedMessages = incomingMessages
+      .filter((message) => !isContextMessage(message))
+      .slice(-10)
 
     if (!GROQ_API_KEY) {
       console.error("GROQ_API_KEY not found in env")
@@ -53,7 +74,8 @@ export async function POST(req: NextRequest) {
         model: "llama-3.1-8b-instant",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          ...messages,
+          ...contextMessages,
+          ...trimmedMessages,
         ],
         max_tokens: 500,
         temperature: 0.7,
@@ -76,4 +98,3 @@ export async function POST(req: NextRequest) {
     )
   }
 }
-
