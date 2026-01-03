@@ -24,6 +24,7 @@ import { DashboardBackground } from "@/components/dashboard-background"
 import { cn } from "@/lib/utils"
 import { generateConsultationPdf } from "@/lib/pdf-generator"
 import { RecordingAlerts } from "@/components/recording-alerts"
+import { ConsultationFeedback } from "@/components/consultation-feedback"
 import { 
   SpeakerIdentification, 
   DialogueWithSpeakers,
@@ -83,6 +84,8 @@ export default function ConsultationPage() {
   const [wsStatus, setWsStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected")
   const [isSaving, setIsSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+  const [savedReportId, setSavedReportId] = useState<string | null>(null)
+  const [showFeedback, setShowFeedback] = useState(false)
   const [finalRecordingTime, setFinalRecordingTime] = useState(0)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfError, setPdfError] = useState("")
@@ -253,7 +256,10 @@ export default function ConsultationPage() {
         throw new Error("Failed to save report")
       }
       
+      const savedData = await response.json()
+      setSavedReportId(savedData.report?.id || null)
       setIsSaved(true)
+      setShowFeedback(true)
     } catch (err) {
       console.error("Error saving report:", err)
       setError("Не удалось сохранить отчёт")
@@ -716,6 +722,8 @@ export default function ConsultationPage() {
                     setResult(null)
                     setRecordingTime(0)
                     setIsSaved(false)
+                    setSavedReportId(null)
+                    setShowFeedback(false)
                   }}
                   className="px-6 py-3 rounded-xl bg-foreground text-background font-medium hover:opacity-90 transition-opacity"
                 >
@@ -724,6 +732,15 @@ export default function ConsultationPage() {
               </div>
               {pdfError && (
                 <p className="text-sm text-red-500 text-center mt-2">{pdfError}</p>
+              )}
+
+              {/* Feedback Section - Show after save */}
+              {isSaved && showFeedback && savedReportId && (
+                <ConsultationFeedback
+                  reportId={savedReportId}
+                  onSubmit={() => setShowFeedback(false)}
+                  onClose={() => setShowFeedback(false)}
+                />
               )}
             </div>
           )}
