@@ -59,13 +59,39 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Generate title with current date
+    // Generate title based on content
     const now = new Date()
-    const title = `Консультация от ${now.toLocaleDateString("ru-RU", { 
+    const dateStr = now.toLocaleDateString("ru-RU", { 
       day: "2-digit", 
       month: "2-digit", 
       year: "numeric" 
-    })}`
+    })
+    
+    // Try to create meaningful title from conclusion/assessment/subjective
+    let title = `Консультация от ${dateStr}`
+    
+    const contentForTitle = conclusion || assessment || subjective || generalCondition
+    if (contentForTitle) {
+      // Extract first meaningful phrase (up to 60 chars)
+      const cleanContent = contentForTitle
+        .replace(/\n/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      
+      if (cleanContent.length > 0) {
+        // Take first sentence or first 60 characters
+        const firstSentence = cleanContent.split(/[.!?]/)[0]?.trim()
+        if (firstSentence && firstSentence.length > 5) {
+          title = firstSentence.length > 60 
+            ? firstSentence.substring(0, 57) + '...'
+            : firstSentence
+        } else if (cleanContent.length > 5) {
+          title = cleanContent.length > 60
+            ? cleanContent.substring(0, 57) + '...'
+            : cleanContent
+        }
+      }
+    }
 
     // Insert consultation report with SOAP format
     const insertResult = await pool.query(
