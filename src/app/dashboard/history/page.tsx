@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardBackground } from "@/components/dashboard-background"
+import { db } from "@/lib/db"
 import { 
   Clock, 
   Filter, 
@@ -41,57 +42,41 @@ type ConsultationApiReport = {
   recommendations?: string | null
 }
 
-type HistoryItem = {
+interface HistoryItem {
   id: string
   type: string
   title: string
   description: string
   date: Date
   status: string
-  result?: Record<string, unknown>
+  result?: {
+    score?: number
+    level?: string
+    hrv?: number
+    stress?: number
+    findings?: number
+    confidence?: number
+  }
   durationSeconds?: number | null
 }
-
-// Mock data fallback
-const mockHistory: HistoryItem[] = [
-  {
-    id: "1",
-    type: "QUESTIONNAIRE",
-    title: "Опросник PSS-10",
-    description: "Оценка уровня стресса",
-    date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
-    status: "completed",
-    result: { score: 18, level: "moderate" },
-  },
-  {
-    id: "2",
-    type: "IOT",
-    title: "IoT Мониторинг",
-    description: "Сессия 15 минут",
-    date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5),
-    status: "completed",
-    result: { hrv: 45, stress: 32 },
-  },
-  {
-    id: "3",
-    type: "CT_MRI",
-    title: "МРТ головного мозга",
-    description: "AI анализ снимка",
-    date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10),
-    status: "reviewed",
-    result: { findings: 0, confidence: 0.94 },
-  },
-]
 
 export default async function HistoryPage() {
   const session = await auth()
   if (!session) redirect("/login")
 
-  let consultationReports: ConsultationApiReport[] = []
+  // Get patient profile
+  const user = await db.user.findUnique({
+    where: { id: session.user.id },
+    include: { patient: true },
+  })
 
+  const patientId = user?.patient?.id
+
+  // Fetch consultation reports
+  let consultationReports: ConsultationApiReport[] = []
   try {
-    const host = headers().get("host")
-    const proto = headers().get("x-forwarded-proto") ?? "http"
+    const host = (await headers()).get("host")
+    const proto = (await headers()).get("x-forwarded-proto") ?? "http"
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || (host ? `${proto}://${host}` : "")
     const apiUrl = baseUrl ? new URL("/api/consultation", baseUrl).toString() : "/api/consultation"
 
@@ -107,7 +92,8 @@ export default async function HistoryPage() {
     console.error("Failed to load consultation history", error)
   }
 
-  const consultationHistory: HistoryItem[] = consultationReports.map((report) => {
+  // Build history from consultations
+  const history: HistoryItem[] = consultationReports.map((report) => {
     const durationSeconds = computeDurationSeconds(
       report.createdAt,
       null,
@@ -125,9 +111,82 @@ export default async function HistoryPage() {
     }
   })
 
-  const history = [...consultationHistory, ...mockHistory].sort(
-    (a, b) => b.date.getTime() - a.date.getTime()
-  )
+  // Fetch real data from database if patient exists
+  if (patientId) {
+    // Fetch analyses
+    const analyses = await db.analysis.findMany({
+      where: { patientId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    })
+
+    for (const analysis of analyses) {
+      history.push({
+        id: analysis.id,
+        type: analysis.serviceType,
+        title: analysis.serviceType === "CT_MRI" ? "МРТ головного мозга" :
+               analysis.serviceType === "GENETICS" ? "Генетический анализ" :
+               analysis.serviceType === "BLOOD" ? "Анализ крови" : "Анализ",
+        description: "AI анализ",
+        date: analysis.createdAt,
+        status: analysis.status === "REVIEWED" ? "reviewed" : 
+                analysis.status === "COMPLETED" ? "completed" : 
+                analysis.status === "FAILED" ? "failed" : "pending",
+        result: {
+          findings: Array.isArray(analysis.findings) ? analysis.findings.length : 0,
+          confidence: analysis.confidence ?? undefined,
+        },
+      })
+    }
+
+    // Fetch IoT sessions
+    const iotSessions = await db.iotSession.findMany({
+      where: { patientId },
+      orderBy: { startedAt: "desc" },
+      take: 50,
+    })
+
+    for (const iotSession of iotSessions) {
+      history.push({
+        id: iotSession.id,
+        type: "IOT",
+        title: "IoT Мониторинг",
+        description: iotSession.duration ? `Сессия ${Math.round(iotSession.duration / 60)} минут` : "Сессия",
+        date: iotSession.startedAt,
+        status: iotSession.endedAt ? "completed" : "pending",
+        result: {
+          hrv: iotSession.avgHeartRate ?? undefined,
+          stress: iotSession.avgStressLevel ? Math.round(iotSession.avgStressLevel) : undefined,
+        },
+      })
+    }
+
+    // Fetch questionnaire results
+    const questionnaires = await db.questionnaireResult.findMany({
+      where: { patientId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    })
+
+    for (const q of questionnaires) {
+      history.push({
+        id: q.id,
+        type: "QUESTIONNAIRE",
+        title: q.questionnaireId === "PSS-10" ? "Опросник PSS-10" : 
+               q.questionnaireId === "MMSE" ? "Опросник MMSE" : "Опросник",
+        description: "Оценка уровня стресса",
+        date: q.createdAt,
+        status: "completed",
+        result: {
+          score: q.totalScore ?? undefined,
+          level: q.category ?? undefined,
+        },
+      })
+    }
+  }
+
+  // Sort by date
+  history.sort((a, b) => b.date.getTime() - a.date.getTime())
 
   return (
     <>

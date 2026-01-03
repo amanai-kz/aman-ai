@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
-    const result = await pool.query(`
+    let query = `
       SELECT 
         id,
         vapi_call_id as "vapiCallId",
@@ -34,8 +34,28 @@ export async function GET(req: NextRequest) {
         urgent_attention as "urgentAttention",
         created_at as "createdAt"
       FROM voice_reports
-      ORDER BY created_at DESC
-    `)
+    `
+    
+    const params: string[] = []
+    
+    // Filter by patient for PATIENT role
+    if (session.user.role === "PATIENT") {
+      const patientResult = await pool.query(
+        `SELECT id FROM patients WHERE "userId" = $1`,
+        [session.user.id]
+      )
+      if (patientResult.rows.length > 0) {
+        query += ` WHERE patient_id = $1`
+        params.push(patientResult.rows[0].id)
+      } else {
+        // No patient profile - return empty
+        return NextResponse.json({ reports: [] })
+      }
+    }
+    
+    query += ` ORDER BY created_at DESC`
+    
+    const result = await pool.query(query, params)
     
     return NextResponse.json({ reports: result.rows })
   } catch (error) {

@@ -159,11 +159,5 @@ Before submitting PR:
 - [ ] PR description is clear
 - [ ] Issue is linked
 
-## 🤝 Code Review
 
-When reviewing:
-- Be respectful and constructive
-- Explain why, not just what
-- Approve when ready, don't block on nitpicks
-- Use suggestions feature for small fixes
 
