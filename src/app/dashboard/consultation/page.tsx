@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useCallback, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { 
   Mic, 
   Square, 
@@ -18,7 +19,9 @@ import {
   Eye,
   Brain,
   Calendar,
-  Users
+  Users,
+  Pause,
+  Play
 } from "lucide-react"
 import { DashboardBackground } from "@/components/dashboard-background"
 import { cn } from "@/lib/utils"
@@ -32,6 +35,8 @@ import {
   type SpeakerRole,
   type DialogueLineWithSpeaker
 } from "@/components/speaker-identification"
+import { useEncounter, type EncounterState } from "@/hooks/use-encounter"
+import { PausedEncounters } from "@/components/paused-encounters"
 
 // WebSocket URL - через nginx прокси для HTTPS совместимости
 const WS_URL = typeof window !== "undefined" 
@@ -75,6 +80,9 @@ function extractSpeakers(rawDialogue: string): string[] {
 }
 
 export default function ConsultationPage() {
+  const { data: session } = useSession()
+  const userId = session?.user?.id || null
+  
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
@@ -94,6 +102,17 @@ export default function ConsultationPage() {
   
   // Recording interruption state
   const [isPaused, setIsPaused] = useState(false)
+  
+  // Encounter management
+  const {
+    currentEncounter,
+    pausedEncounters,
+    isLoading: encounterLoading,
+    pauseEncounter,
+    resumeEncounter,
+    startEncounter,
+    completeEncounter
+  } = useEncounter(userId)
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -133,6 +152,11 @@ export default function ConsultationPage() {
       setSpeakers([])
       setDialogueLines([])
       setIsPaused(false)
+      
+      // Start encounter tracking (if not resuming)
+      if (!currentEncounter && userId) {
+        await startEncounter({ step: "recording" })
+      }
       
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -221,7 +245,68 @@ export default function ConsultationPage() {
         clearInterval(timerRef.current)
         timerRef.current = null
       }
+      
+      // Complete encounter if active
+      if (currentEncounter) {
+        completeEncounter()
+      }
     }
+  }
+
+  // Pause recording and save state
+  const pauseRecording = async () => {
+    if (!isRecording) return
+    
+    // Stop the timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+    
+    // Pause the media recorder
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.pause()
+    }
+    
+    setIsPaused(true)
+    
+    // Save state to encounter
+    if (currentEncounter) {
+      const state: EncounterState = {
+        step: "recording",
+        recordingTime,
+        speakerLabels: speakerLabels as Record<string, string>,
+      }
+      await pauseEncounter(state)
+    }
+    
+    // Stop the stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    
+    setIsRecording(false)
+  }
+
+  // Resume from paused encounter
+  const handleResumeEncounter = async (encounterId: string) => {
+    const encounter = await resumeEncounter(encounterId)
+    if (encounter?.state) {
+      const state = encounter.state as EncounterState
+      
+      // Restore state
+      if (state.recordingTime) {
+        setRecordingTime(state.recordingTime)
+      }
+      if (state.speakerLabels) {
+        setSpeakerLabels(state.speakerLabels as Record<string, SpeakerRole>)
+      }
+      
+      // Start recording again
+      await startRecording()
+    }
+    return encounter
   }
 
   const saveReport = async () => {
@@ -423,6 +508,15 @@ export default function ConsultationPage() {
           </p>
         </div>
 
+        {/* Paused Encounters */}
+        <div className="max-w-4xl mx-auto">
+          <PausedEncounters
+            encounters={pausedEncounters}
+            onResume={handleResumeEncounter}
+            isLoading={encounterLoading}
+          />
+        </div>
+
         {/* Recording Section */}
         <div className="max-w-4xl mx-auto">
           <div className="bg-background/60 backdrop-blur-sm rounded-2xl border p-8 mb-8">
@@ -471,12 +565,26 @@ export default function ConsultationPage() {
                 )}
                 
                 {isRecording ? (
-                  <button
-                    onClick={stopRecording}
-                    className="relative w-32 h-32 rounded-full bg-gradient-to-br from-red-500 to-rose-600 text-white flex items-center justify-center shadow-2xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 cursor-pointer z-50"
-                  >
-                    <Square className="w-12 h-12" />
-                  </button>
+                  <div className="flex items-center gap-6">
+                    {/* Pause Button */}
+                    <button
+                      onClick={pauseRecording}
+                      disabled={encounterLoading}
+                      className="relative w-20 h-20 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-xl shadow-amber-500/30 hover:shadow-amber-500/50 hover:scale-105 transition-all duration-300 cursor-pointer z-50 disabled:opacity-50"
+                      title="Приостановить"
+                    >
+                      <Pause className="w-8 h-8" />
+                    </button>
+                    
+                    {/* Stop Button */}
+                    <button
+                      onClick={stopRecording}
+                      className="relative w-32 h-32 rounded-full bg-gradient-to-br from-red-500 to-rose-600 text-white flex items-center justify-center shadow-2xl shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 cursor-pointer z-50"
+                      title="Остановить и обработать"
+                    >
+                      <Square className="w-12 h-12" />
+                    </button>
+                  </div>
                 ) : isProcessing ? (
                   <div className="w-32 h-32 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-2xl">
                     <Loader2 className="w-12 h-12 animate-spin" />
