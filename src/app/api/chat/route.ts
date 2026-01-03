@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
         : []
 
     const trimmedMessages = incomingMessages
-      .filter((message) => !isContextMessage(message))
+      .filter((message: { role?: string; content?: string }) => !isContextMessage(message))
       .slice(-10)
 
     if (!GROQ_API_KEY) {
