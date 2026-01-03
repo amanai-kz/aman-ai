@@ -35,9 +35,19 @@ import {
 } from "@/components/speaker-identification"
 
 // WebSocket URL - через nginx прокси для HTTPS совместимости
-const WS_URL = typeof window !== "undefined" 
-  ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/analyze`
-  : "ws://localhost:8001/ws/analyze"
+// In development, connect directly to backend; in production, use nginx proxy
+const getWsUrl = () => {
+  if (typeof window === "undefined") return "ws://localhost:8001/ws/analyze"
+  
+  // In production (HTTPS), use the proxy path
+  if (window.location.protocol === "https:") {
+    return `wss://${window.location.host}/ws/analyze`
+  }
+  
+  // In development, connect directly to backend on port 8001
+  return `ws://${window.location.hostname}:8001/ws/analyze`
+}
+const WS_URL = getWsUrl()
 
 interface AnalysisResult {
   status: string
@@ -363,9 +373,9 @@ export default function ConsultationPage() {
         }
       }
 
-      ws.onerror = (event) => {
-        console.error("WebSocket error:", event)
-        setError("Ошибка подключения к серверу анализа")
+      ws.onerror = () => {
+        console.warn("WebSocket connection failed - analysis service may be unavailable")
+        setError("Сервер анализа недоступен. Убедитесь, что backend запущен на порту 8001.")
         setIsProcessing(false)
         setWsStatus("disconnected")
       }

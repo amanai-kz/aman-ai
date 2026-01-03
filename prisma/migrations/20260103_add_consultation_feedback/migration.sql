@@ -4,3 +4,4 @@ ALTER TABLE "consultation_reports" ADD COLUMN "feedback_text" TEXT;
 ALTER TABLE "consultation_reports" ADD COLUMN "feedback_categories" TEXT[] DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE "consultation_reports" ADD COLUMN "feedback_submitted_at" TIMESTAMP(3);
 
+
