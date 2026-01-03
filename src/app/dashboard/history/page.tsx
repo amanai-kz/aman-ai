@@ -16,9 +16,12 @@ import {
   HeartPulse,
   Scan,
   ClipboardList,
+  Stethoscope,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { computeDurationSeconds, formatDuration } from "@/lib/duration"
+import { headers } from "next/headers"
 
 const serviceIcons: Record<string, React.ElementType> = {
   CT_MRI: Scan,
@@ -27,6 +30,16 @@ const serviceIcons: Record<string, React.ElementType> = {
   GENETICS: Dna,
   BLOOD: Droplets,
   REHABILITATION: HeartPulse,
+  CONSULTATION: Stethoscope,
+}
+
+type ConsultationApiReport = {
+  id: string
+  title: string
+  createdAt: string
+  recordingDuration: number | null
+  conclusion?: string | null
+  recommendations?: string | null
 }
 
 interface HistoryItem {
@@ -36,7 +49,7 @@ interface HistoryItem {
   description: string
   date: Date
   status: string
-  result: {
+  result?: {
     score?: number
     level?: string
     hrv?: number
@@ -44,6 +57,7 @@ interface HistoryItem {
     findings?: number
     confidence?: number
   }
+  durationSeconds?: number | null
 }
 
 export default async function HistoryPage() {
@@ -58,9 +72,46 @@ export default async function HistoryPage() {
 
   const patientId = user?.patient?.id
 
-  // Fetch real data from database
-  const history: HistoryItem[] = []
+  // Fetch consultation reports
+  let consultationReports: ConsultationApiReport[] = []
+  try {
+    const host = (await headers()).get("host")
+    const proto = (await headers()).get("x-forwarded-proto") ?? "http"
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || (host ? `${proto}://${host}` : "")
+    const apiUrl = baseUrl ? new URL("/api/consultation", baseUrl).toString() : "/api/consultation"
 
+    const res = await fetch(apiUrl, {
+      cache: "no-store",
+      next: { revalidate: 0 },
+    })
+    if (res.ok) {
+      const data = await res.json()
+      consultationReports = data.reports || []
+    }
+  } catch (error) {
+    console.error("Failed to load consultation history", error)
+  }
+
+  // Build history from consultations
+  const history: HistoryItem[] = consultationReports.map((report) => {
+    const durationSeconds = computeDurationSeconds(
+      report.createdAt,
+      null,
+      report.recordingDuration ?? null
+    )
+
+    return {
+      id: report.id,
+      type: "CONSULTATION",
+      title: report.title || "Консультация",
+      description: report.conclusion || report.recommendations || "Итог консультации",
+      date: new Date(report.createdAt),
+      status: "completed",
+      durationSeconds,
+    }
+  })
+
+  // Fetch real data from database if patient exists
   if (patientId) {
     // Fetch analyses
     const analyses = await db.analysis.findMany({
@@ -70,7 +121,6 @@ export default async function HistoryPage() {
     })
 
     for (const analysis of analyses) {
-      const result = analysis.result as Record<string, unknown> | null
       history.push({
         id: analysis.id,
         type: analysis.serviceType,
@@ -96,17 +146,17 @@ export default async function HistoryPage() {
       take: 50,
     })
 
-    for (const session of iotSessions) {
+    for (const iotSession of iotSessions) {
       history.push({
-        id: session.id,
+        id: iotSession.id,
         type: "IOT",
         title: "IoT Мониторинг",
-        description: session.duration ? `Сессия ${Math.round(session.duration / 60)} минут` : "Сессия",
-        date: session.startedAt,
-        status: session.endedAt ? "completed" : "pending",
+        description: iotSession.duration ? `Сессия ${Math.round(iotSession.duration / 60)} минут` : "Сессия",
+        date: iotSession.startedAt,
+        status: iotSession.endedAt ? "completed" : "pending",
         result: {
-          hrv: session.avgHeartRate ?? undefined,
-          stress: session.avgStressLevel ? Math.round(session.avgStressLevel) : undefined,
+          hrv: iotSession.avgHeartRate ?? undefined,
+          stress: iotSession.avgStressLevel ? Math.round(iotSession.avgStressLevel) : undefined,
         },
       })
     }
@@ -133,10 +183,10 @@ export default async function HistoryPage() {
         },
       })
     }
-
-    // Sort by date
-    history.sort((a, b) => b.date.getTime() - a.date.getTime())
   }
+
+  // Sort by date
+  history.sort((a, b) => b.date.getTime() - a.date.getTime())
 
   return (
     <>
@@ -203,6 +253,9 @@ export default async function HistoryPage() {
                           
                           {/* Results preview */}
                           <div className="mt-3 flex flex-wrap gap-2">
+                            {item.type === "CONSULTATION" && (
+                              <ResultChip label="Длительность" value={formatDuration(item.durationSeconds ?? null)} />
+                            )}
                             {item.type === "QUESTIONNAIRE" && item.result && (
                               <>
                                 <ResultChip label="Балл" value={String(item.result.score ?? "—")} />
@@ -303,4 +356,3 @@ function formatDate(date: Date): string {
   
   return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })
 }
-

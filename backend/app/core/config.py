@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     ]
     
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://phoenix:phoenix123@localhost:5432/amanai"
+    DATABASE_URL: str = "sqlite+aiosqlite:///./amanai.db"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
@@ -42,5 +42,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
 

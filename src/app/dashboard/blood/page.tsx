@@ -178,77 +178,100 @@ export default function BloodAnalysisPage() {
   const [activeStep, setActiveStep] = useState(0)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+const [parsedMarkers, setParsedMarkers] = useState<Record<string, number | string> | null>(null)
   const [parsedData, setParsedData] = useState<Partial<BloodTestInput> | null>(null)
   const [nlpResult, setNlpResult] = useState<NLPResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const backendUrl =
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    process.env.BACKEND_URL ||
+    "http://localhost:8000"
+
+  const transformExtractedMarkers = (extracted: Record<string, any>) => {
+    const formatted: Record<string, number | string> = {}
+    Object.entries(extracted || {}).forEach(([key, value]) => {
+      const val = value?.value
+      if (val === null || val === undefined) return
+      const unit = value?.unit
+      formatted[key.toUpperCase()] = unit ? `${val} ${unit}` : val
+    })
+    return formatted
+  }
+
+  const handlePdfUpload = async (file: File) => {
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("patient_id", "demo")
+
+      const response = await fetch(
+        `${backendUrl}/api/v1/services/blood/upload-pdf`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      )
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}))
+        throw new Error(detail?.detail || "Ошибка загрузки PDF")
+      }
+
+      const payload = await response.json()
+      setParsedMarkers(transformExtractedMarkers(payload.extracted))
+      setStatus("complete")
+    } catch (err: any) {
+      setError(err?.message || "Не удалось обработать PDF")
+      setStatus("error")
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
   const handleFileUpload = async (file: File) => {
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
     const isCsv = file.name.toLowerCase().endsWith('.csv')
-    
-    if (!isPdf && !isCsv) {
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith('.pdf')
+
+    if (!isCsv && !isPdf) {
       setError('Пожалуйста, загрузите PDF или CSV файл')
       return
     }
 
     setUploadedFile(file)
     setError(null)
+    setParsedMarkers(null)
+
+    if (isPdf) {
+      await handlePdfUpload(file)
+      return
+    }
 
     try {
-      if (isPdf) {
-        // Use NLP API for PDF extraction
-        setStatus('running')
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('patient_id', 'current_user') // TODO: Get from session
-        formData.append('save_to_profile', 'true')
-        
-        const response = await fetch('/api/blood/extract', {
-          method: 'POST',
-          body: formData,
-        })
-        
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || 'Ошибка при обработке PDF')
-        }
-        
-        const result = await response.json()
-        
-        // Convert NLP result to our format
-        const extractedData: Partial<BloodTestInput> = {}
-        const markers = result.markers || {}
-        
-        if (markers.wbc?.value) extractedData.WBC = markers.wbc.value
-        if (markers.rbc?.value) extractedData.RBC = markers.rbc.value
-        if (markers.hemoglobin?.value) extractedData.HGB = markers.hemoglobin.value
-        if (markers.platelets?.value) extractedData.PLT = markers.platelets.value
-        if (markers.neutrophils?.value) extractedData.NEUT = markers.neutrophils.value
-        if (markers.lymphocytes?.value) extractedData.LYMPH = markers.lymphocytes.value
-        if (markers.monocytes?.value) extractedData.MONO = markers.monocytes.value
-        if (markers.eosinophils?.value) extractedData.EO = markers.eosinophils.value
-        if (markers.basophils?.value) extractedData.BASO = markers.basophils.value
-        
-        setParsedData(extractedData)
-        setNlpResult(result)
-        setStatus('complete')
-        
-      } else {
-        // CSV parsing (existing logic)
-        const content = await file.text()
-        const data = parseCSV(content)
-        
-        const requiredFields: (keyof BloodTestInput)[] = ['WBC', 'RBC', 'HGB', 'PLT']
-        const found = requiredFields.filter(f => data[f] !== undefined)
-        
-        if (found.length === 0) {
-          setError('Не найдены данные анализа крови. Убедитесь что CSV содержит колонки: WBC, RBC, HGB, PLT и др.')
-          return
-        }
-
-        setParsedData(data)
+      // CSV parsing
+      const content = await file.text()
+      const data = parseCSV(content)
+      
+      const requiredFields: (keyof BloodTestInput)[] = ['WBC', 'RBC', 'HGB', 'PLT']
+      const found = requiredFields.filter(f => data[f] !== undefined)
+      
+      if (found.length === 0) {
+        setError('Не найдены данные анализа крови. Убедитесь что CSV содержит колонки: WBC, RBC, HGB, PLT и др.')
+        return
       }
+
+      const normalizedData: Record<string, number | string> = {}
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== undefined) {
+          normalizedData[key] = value as number
+        }
+      })
+      setParsedMarkers(normalizedData)
+      setParsedData(data)
+      setStatus('complete')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка при чтении файла')
       setStatus('error')
@@ -271,7 +294,7 @@ export default function BloodAnalysisPage() {
 
   const removeFile = () => {
     setUploadedFile(null)
-    setParsedData(null)
+    setParsedMarkers(null)
     setError(null)
   }
 
@@ -300,6 +323,7 @@ export default function BloodAnalysisPage() {
   const resetDemo = () => {
     setStatus('idle')
     setUploadedFile(null)
+    setParsedMarkers(null)
     setParsedData(null)
     setNlpResult(null)
     setError(null)
@@ -317,13 +341,13 @@ export default function BloodAnalysisPage() {
     doc.setTextColor(100, 116, 139)
     doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 28)
     
-    if (parsedData) {
+    if (parsedMarkers) {
       doc.setFontSize(14)
       doc.setTextColor(15, 23, 42)
       doc.text("Загруженные данные:", 20, 45)
       
       let yPos = 55
-      Object.entries(parsedData).forEach(([key, value]) => {
+      Object.entries(parsedMarkers).forEach(([key, value]) => {
         doc.setFontSize(11)
         doc.text(`${key}: ${value}`, 20, yPos)
         yPos += 8
@@ -331,9 +355,9 @@ export default function BloodAnalysisPage() {
     }
     
     doc.setFontSize(14)
-    doc.text("Biomarker Analysis:", 20, parsedData ? 120 : 50)
+    doc.text("Biomarker Analysis:", 20, parsedMarkers ? 120 : 50)
     
-    let yPos = parsedData ? 130 : 60
+let yPos = parsedMarkers ? 130 : 60
     if (nlpResult?.markers) {
       Object.entries(nlpResult.markers)
         .filter(([, data]) => data && typeof data === 'object' && data.value !== null)
@@ -344,6 +368,12 @@ export default function BloodAnalysisPage() {
           doc.text(`${info.name}: ${markerData.value} ${markerData.unit || ''} (${markerData.status || 'normal'})`, 20, yPos)
           yPos += 10
         })
+    } else if (parsedMarkers) {
+      Object.entries(parsedMarkers).forEach(([key, value]) => {
+        doc.setFontSize(11)
+        doc.text(`${key}: ${value}`, 20, yPos)
+        yPos += 10
+      })
     }
     
     doc.save("AmanAI_Blood_Analysis_Report.pdf")
@@ -398,7 +428,7 @@ export default function BloodAnalysisPage() {
                     <p className="font-medium">{uploadedFile.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {(uploadedFile.size / 1024).toFixed(1)} KB
-                      {parsedData && ` • ${Object.keys(parsedData).length} параметров найдено`}
+                      {parsedMarkers && ` ? ${Object.keys(parsedMarkers).length} markers parsed`}
                     </p>
                   </div>
                 </div>
@@ -411,7 +441,7 @@ export default function BloodAnalysisPage() {
                 <div className="p-4 bg-muted rounded-2xl mb-4">
                   <Upload className="w-8 h-8 text-muted-foreground" />
                 </div>
-                <p className="font-medium mb-1">Загрузить результаты анализа крови</p>
+                <p className="font-medium mb-1">Upload CSV or PDF blood test</p>
                 <p className="text-sm text-muted-foreground mb-4">
                   PDF из Invivo/Олимп или CSV (60+ биомаркеров • RU/KZ/EN)
                 </p>
@@ -423,11 +453,18 @@ export default function BloodAnalysisPage() {
                   onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                 />
                 <span className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
-                  Выбрать файл
+                  Choose file
                 </span>
               </label>
             )}
           </div>
+
+          {isUploading && (
+            <div className="mt-3 text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Обработка PDF...
+            </div>
+          )}
 
           {error && (
             <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
@@ -436,11 +473,11 @@ export default function BloodAnalysisPage() {
             </div>
           )}
 
-          {parsedData && Object.keys(parsedData).length > 0 && (
+          {parsedMarkers && Object.keys(parsedMarkers).length > 0 && (
             <div className="mt-4 p-4 bg-muted/50 rounded-xl">
-              <p className="text-sm font-medium mb-2">Найденные параметры:</p>
+              <p className="text-sm font-medium mb-2">Parsed markers:</p>
               <div className="flex flex-wrap gap-2">
-                {Object.entries(parsedData).map(([key, value]) => (
+                {Object.entries(parsedMarkers).map(([key, value]) => (
                   <span key={key} className="px-3 py-1 bg-background border rounded-lg text-xs">
                     {key}: {value}
                   </span>

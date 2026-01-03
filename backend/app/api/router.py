@@ -14,6 +14,7 @@ from app.api.endpoints import (
     genetics,
     blood,
     rehabilitation,
+    encounters,
 )
 
 api_router = APIRouter()
@@ -30,5 +31,5 @@ api_router.include_router(questionnaire.router, prefix="/services/questionnaire"
 api_router.include_router(genetics.router, prefix="/services/genetics", tags=["S4: Genetics"])
 api_router.include_router(blood.router, prefix="/services/blood", tags=["S5: Blood Analysis"])
 api_router.include_router(rehabilitation.router, prefix="/services/rehabilitation", tags=["S6: Rehabilitation"])
-
+api_router.include_router(encounters.router, prefix="/encounters", tags=["Encounters"])
 

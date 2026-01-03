@@ -293,6 +293,13 @@ Content-Type: application/json
 
 ---
 
+## Session context
+
+- Session-level instructions are stored in browser localStorage keyed by the authenticated session id, so switching users or sessions will not reuse another user's context.
+- The active context is injected into every `/api/chat` request as a system message before user turns; clearing the context removes it from subsequent requests while keeping chat history intact.
+
+---
+
 ## Лицензия
 
 MIT License © 2024 Aman AI Research Team
@@ -301,3 +308,14 @@ MIT License © 2024 Aman AI Research Team
 
 **Техническая поддержка:** support@amanai.kz  
 **Веб-сайт:** https://amanai.kz
+
+## Encounters API (pause/resume)
+
+- Status values: `active`, `paused`, `completed`, `cancelled`.
+- Fields added to `encounters`: `status`, `paused_at`, `resumed_at`, `last_activity_at`, and `state_json` for saving flow step/history/context.
+- Core endpoints (prefix `/api/v1`):
+  - `POST /encounters` � start active encounter (header `X-User-Id`).
+  - `POST /encounters/{id}/pause|resume|complete` � stateful status changes with timestamps.
+  - `POST /encounters/{id}/messages` � persist conversation step/history in `state_json`.
+  - `GET /encounters/active` and `GET /encounters?status=active&status=paused` � load latest in-progress encounter.
+- Responses expose a `state` object so the chat UI can restore messages and the last step after resume.
