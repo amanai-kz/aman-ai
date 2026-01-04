@@ -115,6 +115,7 @@ export default function ConsultationPage() {
   
   // Recording interruption state
   const [isPaused, setIsPaused] = useState(false)
+  const [justPaused, setJustPaused] = useState(false) // Show confirmation after pause
   
   // Encounter management
   const {
@@ -165,6 +166,7 @@ export default function ConsultationPage() {
       setSpeakers([])
       setDialogueLines([])
       setIsPaused(false)
+      setJustPaused(false)
       
       // Start encounter tracking (if not resuming)
       if (!currentEncounter && userId) {
@@ -276,12 +278,20 @@ export default function ConsultationPage() {
       timerRef.current = null
     }
     
-    // Pause the media recorder
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.pause()
+    // Stop the media recorder (not just pause - we're saving state)
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop()
     }
     
-    setIsPaused(true)
+    // Stop the stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    
+    setIsRecording(false)
+    setIsPaused(false)
+    setJustPaused(true) // Show "paused" confirmation
     
     // Save state to encounter
     if (currentEncounter) {
@@ -293,13 +303,8 @@ export default function ConsultationPage() {
       await pauseEncounter(state)
     }
     
-    // Stop the stream
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-      streamRef.current = null
-    }
-    
-    setIsRecording(false)
+    // Clear justPaused after 5 seconds
+    setTimeout(() => setJustPaused(false), 5000)
   }
 
   // Resume from paused encounter
@@ -552,6 +557,12 @@ export default function ConsultationPage() {
                     <span className="text-lg font-medium">Приостановлено: {formatTime(recordingTime)}</span>
                   </div>
                 )}
+                {justPaused && !isRecording && !isProcessing && (
+                  <div className="flex items-center gap-2 text-amber-500">
+                    <Pause className="w-5 h-5" />
+                    <span className="text-lg font-medium">Сессия приостановлена и сохранена</span>
+                  </div>
+                )}
                 {isProcessing && (
                   <div className="flex items-center gap-2 text-amber-500">
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -561,7 +572,7 @@ export default function ConsultationPage() {
                     </span>
                   </div>
                 )}
-                {!isRecording && !isProcessing && !result && (
+                {!isRecording && !isProcessing && !result && !justPaused && (
                   <span className="text-lg text-muted-foreground">
                     Нажмите для начала записи
                   </span>
