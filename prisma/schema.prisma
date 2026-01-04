@@ -398,6 +398,12 @@ model ConsultationReport {
   // Speaker diarization data (Provider, Patient, Other)
   speakerLabels     Json?    @map("speaker_labels") // {speakerId: "Provider"|"Patient"|"Other"}
   
+  // User Feedback & Rating
+  rating            Int?     // 1-5 star rating for AI quality
+  feedbackText      String?  @db.Text @map("feedback_text") // User's written feedback
+  feedbackCategories String[] @default([]) @map("feedback_categories") // e.g. ["accuracy", "formatting", "completeness"]
+  feedbackSubmittedAt DateTime? @map("feedback_submitted_at")
+  
   // Metadata
   createdAt         DateTime @default(now()) @map("created_at")
   
