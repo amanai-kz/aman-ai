@@ -42,15 +42,15 @@ import { PausedEncounters } from "@/components/paused-encounters"
 // WebSocket URL - через nginx прокси для HTTPS совместимости
 // In development, connect directly to backend; in production, use nginx proxy
 const getWsUrl = () => {
-  if (typeof window === "undefined") return "ws://localhost:8001/ws/analyze"
+  if (typeof window === "undefined") return "ws://localhost:8000/ws/analyze"
   
   // In production (HTTPS), use the proxy path
   if (window.location.protocol === "https:") {
     return `wss://${window.location.host}/ws/analyze`
   }
   
-  // In development, connect directly to backend on port 8001
-  return `ws://${window.location.hostname}:8001/ws/analyze`
+  // In development, connect directly to backend on port 8000
+  return `ws://${window.location.hostname}:8000/ws/analyze`
 }
 const WS_URL = getWsUrl()
 

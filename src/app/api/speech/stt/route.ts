@@ -6,6 +6,8 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
     const audioFile = formData.get("audio") as File
+    // Support language parameter: "kk" (Kazakh), "ru" (Russian), or omit for auto-detect
+    const language = formData.get("language") as string | null
     
     if (!audioFile) {
       return NextResponse.json({ error: "No audio file" }, { status: 400 })
@@ -16,13 +18,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Groq not configured" }, { status: 500 })
     }
 
-    console.log("Audio file size:", audioFile.size, "type:", audioFile.type)
+    console.log("Audio file size:", audioFile.size, "type:", audioFile.type, "language:", language || "auto")
 
     // Send to Groq Whisper API
     const groqFormData = new FormData()
     groqFormData.append("file", audioFile, "audio.webm")
     groqFormData.append("model", "whisper-large-v3")
-    groqFormData.append("language", "kk") // Kazakh
+    // Only set language if explicitly provided, otherwise Whisper auto-detects
+    if (language && language !== "auto") {
+      groqFormData.append("language", language)
+    }
     groqFormData.append("response_format", "json")
 
     console.log("Sending to Groq Whisper...")

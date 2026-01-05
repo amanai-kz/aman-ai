@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+from app.api.endpoints import analysis
 from app.core.config import settings
 from app.db import init_db, shutdown_db
 
@@ -44,6 +45,9 @@ app.add_middleware(
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# WebSocket endpoints (mounted at root for frontend compatibility)
+app.include_router(analysis.router, prefix="/ws", tags=["WebSocket Analysis"])
 
 
 @app.get("/health")
