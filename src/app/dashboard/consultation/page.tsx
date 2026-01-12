@@ -266,14 +266,25 @@ export default function ConsultationPage() {
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      // If paused, resume first to ensure clean stop
+      if (mediaRecorderRef.current.state === "paused") {
+        mediaRecorderRef.current.resume()
+      }
       mediaRecorderRef.current.stop()
       setIsRecording(false)
+      setIsPaused(false)
       setIsProcessing(true)
       setFinalRecordingTime(recordingTime)
       
       if (timerRef.current) {
         clearInterval(timerRef.current)
         timerRef.current = null
+      }
+      
+      // Stop the stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
       }
       
       // Complete encounter if active
@@ -283,11 +294,44 @@ export default function ConsultationPage() {
     }
   }
 
-  // Pause recording and save state
-  const pauseRecording = async () => {
-    if (!isRecording) return
+  // Pause recording (keeps stream alive, just pauses MediaRecorder)
+  const pauseRecording = () => {
+    if (!isRecording || !mediaRecorderRef.current) return
     
-    // Stop the timer
+    // Pause the timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+    
+    // Use native MediaRecorder pause (keeps audio context intact)
+    if (mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.pause()
+    }
+    
+    setIsPaused(true)
+  }
+
+  // Resume paused recording (within same session)
+  const resumeRecording = () => {
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== "paused") return
+    
+    // Resume MediaRecorder
+    mediaRecorderRef.current.resume()
+    
+    // Resume timer
+    timerRef.current = setInterval(() => {
+      setRecordingTime(prev => prev + 1)
+    }, 1000)
+    
+    setIsPaused(false)
+  }
+
+  // Save session and exit (for later resumption)
+  const saveAndExitRecording = async () => {
+    if (!isRecording && !isPaused) return
+    
+    // Stop timer
     if (timerRef.current) {
       clearInterval(timerRef.current)
       timerRef.current = null
@@ -296,7 +340,7 @@ export default function ConsultationPage() {
     // Set flag to prevent sending audio for analysis
     isPausingRef.current = true
     
-    // Stop the media recorder (this will trigger onstop, but won't send for analysis)
+    // Stop the media recorder
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop()
     }
@@ -309,10 +353,9 @@ export default function ConsultationPage() {
     
     setIsRecording(false)
     setIsPaused(false)
-    setJustPaused(true) // Show "paused" confirmation
+    setJustPaused(true)
     
-    // Save state to encounter (including current recording time)
-    // Note: Audio chunks are preserved in audioChunksRef for when recording resumes
+    // Save state to encounter
     const state: EncounterState = {
       step: "recording",
       recordingTime,
@@ -322,18 +365,13 @@ export default function ConsultationPage() {
     if (currentEncounter) {
       await pauseEncounter(state)
     } else if (userId) {
-      // Start encounter and immediately pause it with state
       await startEncounter(state)
-      if (currentEncounter) {
-        await pauseEncounter(state)
-      }
     }
     
-    // Clear justPaused after 5 seconds
     setTimeout(() => setJustPaused(false), 5000)
   }
 
-  // Resume from paused encounter
+  // Resume from paused encounter (from saved session)
   const handleResumeEncounter = async (encounterId: string) => {
     const encounter = await resumeEncounter(encounterId)
     if (encounter?.state) {
@@ -615,16 +653,20 @@ export default function ConsultationPage() {
                   <div className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" />
                 )}
                 
-                {isRecording ? (
+                {isRecording || isPaused ? (
                   <div className="flex items-center gap-6">
-                    {/* Pause Button */}
+                    {/* Pause/Resume Button */}
                     <button
-                      onClick={pauseRecording}
+                      onClick={isPaused ? resumeRecording : pauseRecording}
                       disabled={encounterLoading}
-                      className="relative w-20 h-20 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-xl shadow-amber-500/30 hover:shadow-amber-500/50 hover:scale-105 transition-all duration-300 cursor-pointer z-50 disabled:opacity-50"
-                      title="Приостановить"
+                      className={`relative w-20 h-20 rounded-full text-white flex items-center justify-center shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer z-50 disabled:opacity-50 ${
+                        isPaused 
+                          ? "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/30 hover:shadow-emerald-500/50" 
+                          : "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/30 hover:shadow-amber-500/50"
+                      }`}
+                      title={isPaused ? "Продолжить" : "Приостановить"}
                     >
-                      <Pause className="w-8 h-8" />
+                      {isPaused ? <Play className="w-8 h-8" /> : <Pause className="w-8 h-8" />}
                     </button>
                     
                     {/* Stop Button */}
