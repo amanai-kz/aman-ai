@@ -642,7 +642,7 @@ export default function ConsultationPage() {
                   </div>
                 ) : (
                   <button
-                    onClick={startRecording}
+                    onClick={() => startRecording()}
                     className="relative w-32 h-32 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-2xl shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-105 transition-all duration-300 cursor-pointer z-50"
                   >
                     <Mic className="w-12 h-12" />

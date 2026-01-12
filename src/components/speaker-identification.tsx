@@ -258,7 +258,10 @@ export function SpeakerIdentification({
 
               {/* Dropdown */}
               {isOpen && (
-                <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-background border rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                <div 
+                  className="absolute z-50 top-full left-0 right-0 mt-1 bg-background border rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {(Object.keys(ROLE_CONFIG) as SpeakerRole[]).map(role => {
                     const roleConfig = ROLE_CONFIG[role]
                     const RoleIcon = roleConfig.icon
