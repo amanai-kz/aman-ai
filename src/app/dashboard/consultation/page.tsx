@@ -465,7 +465,7 @@ export default function ConsultationPage() {
 
       ws.onerror = () => {
         console.warn("WebSocket connection failed - analysis service may be unavailable")
-        setError("Сервер анализа недоступен. Убедитесь, что backend запущен на порту 8001.")
+        setError("Сервер анализа недоступен. Убедитесь, что backend запущен на порту 8000.")
         setIsProcessing(false)
         setWsStatus("disconnected")
       }
