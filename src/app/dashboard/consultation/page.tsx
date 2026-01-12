@@ -133,6 +133,7 @@ export default function ConsultationPage() {
   const wsRef = useRef<WebSocket | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const isPausingRef = useRef(false) // Track if we're pausing (not stopping to analyze)
 
   // Format time as MM:SS
   const formatTime = (seconds: number) => {
@@ -157,14 +158,18 @@ export default function ConsultationPage() {
     setPdfLoading(false)
   }, [result])
 
-  const startRecording = async () => {
+  const startRecording = async (resumeFromTime?: number) => {
     try {
       setError("")
       setResult(null)
-      audioChunksRef.current = []
-      setSpeakerLabels({})
-      setSpeakers([])
-      setDialogueLines([])
+      // Only clear audio chunks if starting fresh (not resuming)
+      if (resumeFromTime === undefined) {
+        audioChunksRef.current = []
+        setSpeakerLabels({})
+        setSpeakers([])
+        setDialogueLines([])
+      }
+      // If resuming, keep existing audioChunksRef to continue recording
       setIsPaused(false)
       setJustPaused(false)
       
@@ -204,14 +209,24 @@ export default function ConsultationPage() {
         stream.getTracks().forEach(track => track.stop())
         streamRef.current = null
         
-        // Create audio blob and send to WebSocket
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
-        sendAudioToServer(audioBlob)
+        // Only send for analysis if NOT pausing
+        if (!isPausingRef.current) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
+          sendAudioToServer(audioBlob)
+        }
+        // Reset pause flag
+        isPausingRef.current = false
       }
 
       mediaRecorder.start(1000) // Collect data every second
       setIsRecording(true)
-      setRecordingTime(0)
+      
+      // Set initial time (0 for new recording, or restored time for resume)
+      if (resumeFromTime !== undefined) {
+        setRecordingTime(resumeFromTime)
+      } else {
+        setRecordingTime(0)
+      }
       
       // Start timer
       timerRef.current = setInterval(() => {
@@ -278,7 +293,10 @@ export default function ConsultationPage() {
       timerRef.current = null
     }
     
-    // Stop the media recorder (not just pause - we're saving state)
+    // Set flag to prevent sending audio for analysis
+    isPausingRef.current = true
+    
+    // Stop the media recorder (this will trigger onstop, but won't send for analysis)
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop()
     }
@@ -293,14 +311,22 @@ export default function ConsultationPage() {
     setIsPaused(false)
     setJustPaused(true) // Show "paused" confirmation
     
-    // Save state to encounter
+    // Save state to encounter (including current recording time)
+    // Note: Audio chunks are preserved in audioChunksRef for when recording resumes
+    const state: EncounterState = {
+      step: "recording",
+      recordingTime,
+      speakerLabels: speakerLabels as Record<string, string>,
+    }
+    
     if (currentEncounter) {
-      const state: EncounterState = {
-        step: "recording",
-        recordingTime,
-        speakerLabels: speakerLabels as Record<string, string>,
-      }
       await pauseEncounter(state)
+    } else if (userId) {
+      // Start encounter and immediately pause it with state
+      await startEncounter(state)
+      if (currentEncounter) {
+        await pauseEncounter(state)
+      }
     }
     
     // Clear justPaused after 5 seconds
@@ -313,16 +339,14 @@ export default function ConsultationPage() {
     if (encounter?.state) {
       const state = encounter.state as EncounterState
       
-      // Restore state
-      if (state.recordingTime) {
-        setRecordingTime(state.recordingTime)
-      }
+      // Restore speaker labels before starting
       if (state.speakerLabels) {
         setSpeakerLabels(state.speakerLabels as Record<string, SpeakerRole>)
       }
       
-      // Start recording again
-      await startRecording()
+      // Start recording with restored time
+      const savedTime = state.recordingTime || 0
+      await startRecording(savedTime)
     }
     return encounter
   }
