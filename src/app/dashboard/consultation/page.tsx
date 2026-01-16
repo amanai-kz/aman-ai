@@ -25,7 +25,7 @@ import {
 } from "lucide-react"
 import { DashboardBackground } from "@/components/dashboard-background"
 import { cn } from "@/lib/utils"
-import { generateConsultationPdf } from "@/lib/pdf-generator"
+import { generateConsultationPdf, PdfExportOptions } from "@/lib/pdf-generator"
 import { RecordingAlerts } from "@/components/recording-alerts"
 import { ConsultationFeedback } from "@/components/consultation-feedback"
 import { 
@@ -38,6 +38,8 @@ import {
 } from "@/components/speaker-identification"
 import { useEncounter, type EncounterState } from "@/hooks/use-encounter"
 import { PausedEncounters } from "@/components/paused-encounters"
+import { PdfExportOptionsDialog } from "@/components/pdf-export-options-dialog"
+import { Progress } from "@/components/ui/progress"
 
 // WebSocket URL - через nginx прокси для HTTPS совместимости
 // In development, connect directly to backend; in production, use nginx proxy
@@ -107,6 +109,9 @@ export default function ConsultationPage() {
   const [finalRecordingTime, setFinalRecordingTime] = useState(0)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfError, setPdfError] = useState("")
+  const [showExportDialog, setShowExportDialog] = useState(false)
+  const [pdfProgress, setPdfProgress] = useState(0)
+  const [pdfProgressStatus, setPdfProgressStatus] = useState("")
   
   // Speaker identification state
   const [speakerLabels, setSpeakerLabels] = useState<Record<string, SpeakerRole>>({})
@@ -419,7 +424,7 @@ export default function ConsultationPage() {
       }
       
       const savedData = await response.json()
-      setSavedReportId(savedData.report?.id || null)
+      setSavedReportId(savedData.report?.id || savedData.id || null)
       setIsSaved(true)
       setShowFeedback(true)
     } catch (err) {
@@ -430,14 +435,17 @@ export default function ConsultationPage() {
     }
   }
 
-  const downloadPdf = async () => {
+  const downloadPdf = async (options: PdfExportOptions = {}) => {
     if (!result?.result) return
     setPdfError("")
     setPdfLoading(true)
+    setPdfProgress(0)
+    setPdfProgressStatus("Начинаем...")
 
     try {
       const blob = await generateConsultationPdf(
         {
+          reportId: savedReportId,
           recordingDuration: finalRecordingTime,
           generalCondition: result.result.generalCondition,
           dialogueProtocol: result.result.dialogueProtocol,
@@ -445,19 +453,84 @@ export default function ConsultationPage() {
           conclusion: result.result.conclusion,
           createdAt: new Date(),
         },
-        { brandName: "AMAN AI" }
+        { brandName: "AMAN AI", ...options },
+        (progress, status) => {
+          setPdfProgress(progress)
+          setPdfProgressStatus(status)
+        }
       )
 
       const url = URL.createObjectURL(blob)
       const link = document.createElement("a")
       const datePart = new Date().toISOString().split("T")[0]
       link.href = url
-      link.download = `Consultation_preview_${datePart}.pdf`
+      link.download = `AMAN_AI_Consultation_${datePart}.pdf`
       link.click()
       URL.revokeObjectURL(url)
+      
+      setPdfProgressStatus("Готово!")
     } catch (err) {
       console.error("Error generating consultation PDF:", err)
       setPdfError("PDF генерациясы сәтсіз аяқталды. Кейінірек қайталап көріңіз.")
+    } finally {
+      setPdfLoading(false)
+      setTimeout(() => {
+        setPdfProgress(0)
+        setPdfProgressStatus("")
+      }, 2000)
+    }
+  }
+
+  const handleEmailShare = async (options: PdfExportOptions, email: string) => {
+    if (!result?.result) return
+    
+    setPdfLoading(true)
+    try {
+      // Generate PDF
+      const blob = await generateConsultationPdf(
+        {
+          reportId: savedReportId,
+          recordingDuration: finalRecordingTime,
+          generalCondition: result.result.generalCondition,
+          dialogueProtocol: result.result.dialogueProtocol,
+          recommendations: result.result.recommendations,
+          conclusion: result.result.conclusion,
+          createdAt: new Date(),
+        },
+        { brandName: "AMAN AI", ...options }
+      )
+
+      // Convert to base64
+      const reader = new FileReader()
+      reader.readAsDataURL(blob)
+      reader.onloadend = async () => {
+        const base64data = reader.result?.toString().split(",")[1]
+        
+        if (!base64data) {
+          throw new Error("Failed to convert PDF to base64")
+        }
+
+        // Send email
+        const response = await fetch("/api/pdf/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientEmail: email,
+            pdfBase64: base64data,
+            reportTitle: "Отчет по консультации",
+            reportType: "consultation",
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to send email")
+        }
+
+        alert("PDF успешно отправлен!")
+      }
+    } catch (err) {
+      console.error("Error sending PDF:", err)
+      alert("Не удалось отправить PDF. Попробуйте позже.")
     } finally {
       setPdfLoading(false)
     }
@@ -896,14 +969,14 @@ export default function ConsultationPage() {
                   </div>
                 )}
                 <button
-                  onClick={downloadPdf}
+                  onClick={() => setShowExportDialog(true)}
                   disabled={isPdfDisabled}
                   className="px-6 py-3 rounded-xl border border-emerald-500 text-emerald-500 hover:bg-emerald-500/10 transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
                   {pdfLoading ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      PDF...
+                      {pdfProgressStatus || "PDF..."}
                     </>
                   ) : (
                     <>
@@ -912,6 +985,15 @@ export default function ConsultationPage() {
                     </>
                   )}
                 </button>
+                
+                {pdfLoading && pdfProgress > 0 && (
+                  <div className="w-full px-6">
+                    <Progress value={pdfProgress} className="h-2" />
+                    <p className="text-xs text-muted-foreground mt-1 text-center">
+                      {pdfProgressStatus}
+                    </p>
+                  </div>
+                )}
                 <button
                   onClick={() => {
                     setResult(null)
@@ -939,6 +1021,19 @@ export default function ConsultationPage() {
               )}
             </div>
           )}
+
+          {/* Export Options Dialog */}
+          <PdfExportOptionsDialog
+            open={showExportDialog}
+            onOpenChange={setShowExportDialog}
+            onExport={downloadPdf}
+            onEmailShare={handleEmailShare}
+            showEmailOption={true}
+            defaultOptions={{
+              includeDialogue: true,
+              includeQRCode: !!savedReportId,
+            }}
+          />
         </div>
 
         {/* Features */}
