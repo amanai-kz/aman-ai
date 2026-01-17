@@ -50,7 +50,7 @@ services:
       - SECRET_KEY=super-secret-key-change-in-production
       - DEBUG=true
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
       redis:
         condition: service_healthy
