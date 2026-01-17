@@ -1,8 +1,5 @@
 # Aman AI Platform - Docker Compose
 # ==================================
-
-version: '3.8'
-
 services:
   # PostgreSQL Database
   db:
@@ -13,7 +10,7 @@ services:
       POSTGRES_PASSWORD: amanai2024secure
       POSTGRES_DB: amanai
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
+import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { MessageCircle, X, Send, Bot, User, Sparkles, ChevronDown, ChevronUp, Pause, Play, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -16,11 +17,19 @@ import {
   saveSessionContext,
 } from "@/lib/session-context"
 
+interface Action {
+  type: "link"
+  label: string
+  href: string
+  variant?: "primary" | "secondary" | "outline"
+}
+
 interface Message {
   id: string
   role: "user" | "assistant"
   content: string
   timestamp: Date
+  actions?: Action[]
 }
 
 type EncounterStatus = "active" | "paused" | "completed" | "cancelled" | null
@@ -28,11 +37,39 @@ type EncounterStatus = "active" | "paused" | "completed" | "cancelled" | null
 const WELCOME_MESSAGE: Message = {
   id: "welcome",
   role: "assistant",
-  content: "Привет! 👋 Я AI-ассистент Aman AI. Готов ответить на вопросы о платформе. Чем могу помочь?",
+  content: "Hi! I'm the Aman AI assistant. Ask me about platform navigation, features, or troubleshooting.",
   timestamp: new Date(),
 }
 
-async function getAIResponse(history: Message[], sessionContext: string): Promise<string> {
+function normalizeActions(actions?: unknown): Action[] {
+  if (!Array.isArray(actions)) return []
+
+  return actions
+    .map((action) => {
+      if (!action || typeof action !== "object") return {} as Partial<Action>
+      const raw = action as Record<string, unknown>
+
+      return {
+        type: raw.type === "link" ? "link" : undefined,
+        label: typeof raw.label === "string" ? raw.label : undefined,
+        href: typeof raw.href === "string" ? raw.href : undefined,
+        variant:
+          raw.variant === "primary" || raw.variant === "secondary"
+            ? (raw.variant as Action["variant"])
+            : undefined,
+      }
+    })
+    .filter(
+      (action): action is Action =>
+        action.type === "link" &&
+        typeof action.label === "string" &&
+        typeof action.href === "string" &&
+        !!action.label.trim() &&
+        !!action.href.trim()
+    )
+}
+
+async function getAIResponse(history: Message[], sessionContext: string): Promise<{ message: string; actions?: Action[] }> {
   try {
     const payloadMessages = buildMessagesWithContext(
       history.map((m) => ({
@@ -56,10 +93,12 @@ async function getAIResponse(history: Message[], sessionContext: string): Promis
     }
 
     const data = await response.json()
-    return data.message || "Кешіріңіз, қате болды."
+    const message = data.message || data.response || "I couldn't generate a response. Please try again."
+    const actions = normalizeActions(data.actions)
+    return { message, actions: actions.length ? actions : undefined }
   } catch (error) {
     console.error("Chat error:", error)
-    return "Байланыс қатесі. Қайталап көріңіз."
+    return { message: "We couldn't reply just now. Please try again.", actions: undefined }
   }
 }
 
@@ -93,6 +132,7 @@ export function AIAssistant() {
       role: msg?.role === "assistant" ? "assistant" : "user",
       content: msg?.content || "",
       timestamp: msg?.timestamp ? new Date(msg.timestamp) : new Date(),
+      actions: normalizeActions(msg?.actions),
     }))
   }
 
@@ -320,16 +360,17 @@ export function AIAssistant() {
     try {
       await persistMessageToBackend(newMessages, userMessage)
 
-      const responseText = await getAIResponse(newMessages, sessionContext)
+      const responsePayload = await getAIResponse(newMessages, sessionContext)
 
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: responseText,
+        content: responsePayload.message,
+        actions: responsePayload.actions,
         timestamp: new Date(),
       }
 
-      setMessages(prev => [...prev, aiResponse])
+      setMessages((prev) => [...prev, aiResponse])
       await persistMessageToBackend([...newMessages, aiResponse], aiResponse)
     } finally {
       setIsTyping(false)
@@ -367,7 +408,7 @@ export function AIAssistant() {
                 <h3 className="font-medium">Aman AI Assistant</h3>
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Онлайн
+                  Online
                 </p>
               </div>
             </div>
@@ -431,7 +472,7 @@ export function AIAssistant() {
                 <Textarea
                   value={contextDraft}
                   onChange={(e) => setContextDraft(e.target.value.slice(0, SESSION_CONTEXT_MAX_LENGTH))}
-                  placeholder="Add instructions, preferences, or guardrails for this session..."
+                  placeholder="Type your message..."
                   maxLength={SESSION_CONTEXT_MAX_LENGTH}
                   className="bg-muted/60 border-border"
                 />
@@ -486,7 +527,31 @@ export function AIAssistant() {
                     : "bg-muted rounded-tl-sm"
                 )}
               >
-                {message.content}
+                <div className="space-y-3">
+                  <div>{message.content}</div>
+
+                  {message.role === "assistant" && message.actions?.length ? (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {message.actions.map((action, idx) => {
+                        if (action.type !== "link") return null
+                        const buttonVariant =
+                          action.variant === "primary"
+                            ? ("default" as const)
+                            : action.variant === "secondary"
+                              ? ("secondary" as const)
+                              : ("outline" as const)
+
+                        return (
+                          <Link key={`${message.id}-action-${idx}`} href={action.href}>
+                            <Button variant={buttonVariant} size="sm">
+                              {action.label}
+                            </Button>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
           ))}
@@ -517,7 +582,7 @@ export function AIAssistant() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Сұрақ жазыңыз..."
+              placeholder="Type your message..."
               className="flex-1 px-4 py-2 bg-muted rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
               disabled={isPaused}
             />
@@ -531,7 +596,7 @@ export function AIAssistant() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground text-center mt-2">
-            AI ассистент демо режимінде жұмыс істейді
+            AI responses may be inaccurate. Always verify important information.
           </p>
         </div>
       </div>
@@ -553,3 +618,7 @@ export function AIAssistant() {
     </>
   )
 }
+
+
+
+
