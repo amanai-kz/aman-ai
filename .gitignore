@@ -97,6 +97,10 @@ fix-production.ps1
 upload-and-fix.ps1
 fix-bot-spam.sh
 
+# Telegram server-management bots (contain live token; keep local only)
+telegram-server-bot*.py
+deploy-bot-v3-commands.txt
+
 # Backups & stray artifacts
 *.bak
 nul
