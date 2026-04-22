@@ -1,18 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useMemo, Suspense } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Logo } from "@/components/logo"
-import { ArrowRight, Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react"
+import { ArrowRight, Loader2, Eye, EyeOff } from "lucide-react"
 
 function LoginForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const registered = searchParams.get("registered")
   
   const [focused, setFocused] = useState<string | null>(null)
   const [email, setEmail] = useState("")
@@ -119,14 +117,6 @@ function LoginForm() {
                 <p className="text-muted-foreground">Войдите в свой аккаунт для доступа к платформе</p>
               </div>
 
-              {/* Success message after registration */}
-              {registered && (
-                <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-sm text-green-600 flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-                  <span>Регистрация успешна! Войдите в аккаунт.</span>
-                </div>
-              )}
-
               {error && (
                 <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-sm text-destructive">
                   {error}
@@ -203,12 +193,6 @@ function LoginForm() {
                 </Button>
               </form>
 
-              <p className="text-center text-sm text-muted-foreground">
-                Нет аккаунта?{" "}
-                <Link href="/register" className="text-foreground font-medium hover:underline underline-offset-4">
-                  Создать аккаунт
-                </Link>
-              </p>
             </div>
           </div>
         </div>
@@ -218,9 +202,5 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
-      <LoginForm />
-    </Suspense>
-  )
+  return <LoginForm />
 }

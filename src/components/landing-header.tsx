@@ -41,14 +41,6 @@ export function LandingHeader() {
             </Button>
           ) : (
             <>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-foreground hidden sm:flex h-10 px-5"
-                asChild
-              >
-                <Link href="/register">Регистрация</Link>
-              </Button>
               <Button size="sm" className="rounded-full px-6 h-10" asChild>
                 <Link href="/login">Войти</Link>
               </Button>
