@@ -1,3 +1,5 @@
+import { neuroguardService } from "./neuroguard-service"
+
 export const services = [
   // MRI Analysis Services
   {
@@ -63,7 +65,7 @@ export const services = [
     longDescription: "PPG, IMU, EMG сенсоры для мониторинга стресса и состояния нервной системы",
     iconName: "Waves",
     href: "/dashboard/iot",
-    embedUrl: "https://dev.amanai.com.kz",
+    embedUrl: "https://amanai.kz/iot-embed/",
     team: ["Mukhammedzhan"],
     status: "active" as const,
   },
@@ -157,6 +159,55 @@ export const services = [
     iconName: "AudioLines",
     href: "/dashboard/consultation",
     embedUrl: null,
+    team: ["Alnur"],
+    status: "active" as const,
+  },
+  neuroguardService,
+  // Zhurek AI
+  {
+    id: "zhurek",
+    title: "Zhurek AI",
+    description: "Мониторинг здоровья сердца с IoT и ML",
+    longDescription: "AI-платформа для мониторинга сердечно-сосудистой системы: HR, HRV, SpO2 в реальном времени с персональной оценкой рисков",
+    iconName: "HeartPulse",
+    href: "/dashboard/zhurek",
+    embedUrl: "https://zhurekai.kz/embed",
+    team: ["Alnur"],
+    status: "active" as const,
+  },
+  // Sana AI
+  {
+    id: "sana",
+    title: "Sana AI",
+    description: "AI-мониторинг и анализ качества сна",
+    longDescription: "Интеллектуальный анализ сна с рекомендациями по улучшению — IoT-датчики и AI для оценки фаз сна и выявления нарушений",
+    iconName: "Moon",
+    href: "/dashboard/sana",
+    embedUrl: "https://sana-ai.kz/embed",
+    team: ["Alnur"],
+    status: "active" as const,
+  },
+  // Zhan AI
+  {
+    id: "zhan",
+    title: "Zhan AI",
+    description: "Скрининг миопии по фундус-фото (CDSS)",
+    longDescription: "AI-система клинической поддержки принятия решений: скрининг миопии по снимку глазного дна (SwinV2-Tiny, AUC 0.946)",
+    iconName: "Eye",
+    href: "/dashboard/zhan",
+    embedUrl: "https://zhan-ai.kz/embed",
+    team: ["Alnur"],
+    status: "active" as const,
+  },
+  // MedTwin
+  {
+    id: "medtwin",
+    title: "MedTwin",
+    description: "Цифровой помощник врача",
+    longDescription: "Цифровой двойник пациента: транскрипция приёма, автоматическая выписка и анализ данных в реальном времени",
+    iconName: "Stethoscope",
+    href: "/dashboard/medtwin",
+    embedUrl: "https://medtwin.kz",
     team: ["Alnur"],
     status: "active" as const,
   },

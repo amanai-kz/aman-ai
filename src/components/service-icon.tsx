@@ -4,7 +4,7 @@ import {
   Scan, Activity, ClipboardList, Dna, Droplets, HeartPulse, Brain, Cpu, Eye,
   ScanLine, Radiation, BrainCircuit, FlaskConical, TestTube2, Waves, 
   PersonStanding, Syringe, Dumbbell, Microscope, Stethoscope, Atom, BookOpen,
-  Mic, FileText, LucideIcon 
+  Mic, FileText, Moon, AudioLines, LucideIcon 
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -33,6 +33,8 @@ const iconMap: Record<string, LucideIcon> = {
   BookOpen,
   Mic,
   FileText,
+  Moon,
+  AudioLines,
 }
 
 interface ServiceIconProps {
