@@ -48,14 +48,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const phone = user.patient?.phone || user.patient?.phoneNumber
+    const phone = user.patient?.phone || (user.patient as Record<string, unknown>)?.phoneNumber as string | undefined
     const email = user.email
 
     // Get report data
     let reportData: { title: string; summary: string; date: string } | null = null
 
     if (reportType === "consultation") {
-      const report = await db.consultationReport.findUnique({ where: { id: reportId } })
+      const report = await (db as any).consultationReport.findUnique({ where: { id: reportId } })
       if (report) {
         reportData = {
           title: report.title,
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
         }
       }
     } else {
-      const report = await db.voiceReport.findUnique({ where: { id: reportId } })
+      const report = await (db as any).voiceReport.findUnique({ where: { id: reportId } })
       if (report) {
         reportData = {
           title: report.title,
@@ -202,6 +202,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+
+
+
+
+
 
 
 
