@@ -20,7 +20,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Next.js Frontend (на порту 3000)
+  # Next.js Frontend (внутри контейнера 3000; на хосте 3050 — как в nginx amanai.kz)
   frontend:
     build:
       context: .
@@ -28,7 +28,7 @@ services:
     container_name: aman-frontend
     restart: always
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3050:3000"
     environment:
       - DATABASE_URL=postgresql://aman:${DB_PASSWORD:-amanai2024secure}@db:5432/amanai
       - AUTH_SECRET=${AUTH_SECRET:-super-secret-key-change-in-production}
