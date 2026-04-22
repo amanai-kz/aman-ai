@@ -80,3 +80,24 @@ docker-compose.override.yml
 
 # Database files
 backend/*.db
+ruvector.db
+
+# Claude Code / agent tooling (local only)
+.claude/
+.claude-flow/
+.swarm/
+.mcp.json
+CLAUDE.md
+
+# Local helper scripts & one-off patches
+patch_*.py
+setup_all_embeds.py
+check-production.ps1
+fix-production.ps1
+upload-and-fix.ps1
+fix-bot-spam.sh
+
+# Backups & stray artifacts
+*.bak
+nul
+
