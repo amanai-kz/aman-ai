@@ -34,8 +34,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ru">
-      <body className={`${manrope.variable} ${jetBrainsMono.variable} font-sans antialiased`}>
+    <html lang="ru" suppressHydrationWarning data-scroll-behavior="smooth">
+      <body suppressHydrationWarning className={`${manrope.variable} ${jetBrainsMono.variable} font-sans antialiased`}>
         <SessionProvider>
           {children}
         </SessionProvider>
