@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react"
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { useSession } from "next-auth/react"
 import { MessageCircle, X, Send, Bot, User, Sparkles, ChevronDown, ChevronUp, Pause, Play, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,13 @@ interface Message {
   role: "user" | "assistant"
   content: string
   timestamp: Date
+}
+
+interface StoredEncounterMessage {
+  id?: string
+  role?: string
+  content?: string
+  timestamp?: string
 }
 
 type EncounterStatus = "active" | "paused" | "completed" | "cancelled" | null
@@ -76,6 +83,7 @@ export function AIAssistant() {
   const [encounterStatus, setEncounterStatus] = useState<EncounterStatus>(null)
   const [encounterError, setEncounterError] = useState<string | null>(null)
   const [isEncounterBusy, setIsEncounterBusy] = useState(false)
+  const [encounterSyncAvailable, setEncounterSyncAvailable] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const backendUrl =
     process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -86,7 +94,7 @@ export function AIAssistant() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
-  const mapStateMessages = (stateMessages?: any[]): Message[] => {
+  const mapStateMessages = (stateMessages?: StoredEncounterMessage[]): Message[] => {
     if (!stateMessages?.length) return [WELCOME_MESSAGE]
     return stateMessages.map((msg, idx) => ({
       id: msg?.id || `${idx}-${Date.now()}`,
@@ -106,8 +114,17 @@ export function AIAssistant() {
     context: sessionContext ? { session_context: sessionContext } : {},
   })
 
-  const loadActiveEncounter = async () => {
-    if (!session?.user?.id) return
+  const disableEncounterSync = () => {
+    setEncounterSyncAvailable(false)
+    setEncounterId(null)
+    setEncounterStatus(null)
+    setEncounterError(null)
+  }
+
+  const isNetworkFailure = (error: unknown) => error instanceof TypeError
+
+  const loadActiveEncounter = useCallback(async () => {
+    if (!session?.user?.id || !encounterSyncAvailable) return
     try {
       setIsEncounterBusy(true)
       const response = await fetch(`${backendUrl}/api/v1/encounters/active`, {
@@ -125,14 +142,16 @@ export function AIAssistant() {
         setMessages(mapStateMessages(data.state.messages))
       }
     } catch (error) {
-      console.error("Failed to load active encounter", error)
+      if (isNetworkFailure(error)) {
+        disableEncounterSync()
+      }
     } finally {
       setIsEncounterBusy(false)
     }
-  }
+  }, [backendUrl, encounterSyncAvailable, session?.user?.id])
 
   const ensureEncounterForMessages = async (stateMessages: Message[]): Promise<string | null> => {
-    if (!session?.user?.id) return null
+    if (!session?.user?.id || !encounterSyncAvailable) return null
     if (encounterStatus === "paused") {
       setEncounterError("Encounter is paused. Resume to continue.")
       return null
@@ -164,6 +183,10 @@ export function AIAssistant() {
       setEncounterError(null)
       return data.id as string
     } catch (error) {
+      if (isNetworkFailure(error)) {
+        disableEncounterSync()
+        return null
+      }
       console.error("Encounter start failed", error)
       setEncounterError("Unable to sync encounter with server.")
       return null
@@ -171,7 +194,7 @@ export function AIAssistant() {
   }
 
   const persistMessageToBackend = async (stateMessages: Message[], message: Message) => {
-    if (!session?.user?.id) return
+    if (!session?.user?.id || !encounterSyncAvailable) return
     const id = await ensureEncounterForMessages(stateMessages)
     if (!id) return
 
@@ -191,13 +214,17 @@ export function AIAssistant() {
       })
       setEncounterError(null)
     } catch (error) {
+      if (isNetworkFailure(error)) {
+        disableEncounterSync()
+        return
+      }
       console.error("Failed to persist message", error)
       setEncounterError("Could not save conversation progress.")
     }
   }
 
   const pauseEncounter = async () => {
-    if (!session?.user?.id || !encounterId) return
+    if (!session?.user?.id || !encounterId || !encounterSyncAvailable) return
     try {
       setIsEncounterBusy(true)
       const response = await fetch(`${backendUrl}/api/v1/encounters/${encounterId}/pause`, {
@@ -215,6 +242,10 @@ export function AIAssistant() {
       setEncounterStatus(data.status as EncounterStatus)
       setEncounterError(null)
     } catch (error) {
+      if (isNetworkFailure(error)) {
+        disableEncounterSync()
+        return
+      }
       console.error("Failed to pause encounter", error)
       setEncounterError("Pause failed. Please try again.")
     } finally {
@@ -223,7 +254,7 @@ export function AIAssistant() {
   }
 
   const resumeEncounter = async (): Promise<boolean> => {
-    if (!session?.user?.id || !encounterId) return false
+    if (!session?.user?.id || !encounterId || !encounterSyncAvailable) return false
     try {
       setIsEncounterBusy(true)
       const response = await fetch(`${backendUrl}/api/v1/encounters/${encounterId}/resume`, {
@@ -243,6 +274,10 @@ export function AIAssistant() {
       setEncounterError(null)
       return true
     } catch (error) {
+      if (isNetworkFailure(error)) {
+        disableEncounterSync()
+        return false
+      }
       console.error("Failed to resume encounter", error)
       setEncounterError("Resume failed. Please try again.")
       return false
@@ -264,9 +299,9 @@ export function AIAssistant() {
   }, [session?.user?.id])
 
   useEffect(() => {
-    if (!session?.user?.id) return
+    if (!session?.user?.id || !encounterSyncAvailable) return
     loadActiveEncounter()
-  }, [session?.user?.id])
+  }, [encounterSyncAvailable, loadActiveEncounter, session?.user?.id])
 
   const handleApplyContext = () => {
     const sanitizedDraft = sanitizeContext(contextDraft)
