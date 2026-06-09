@@ -4,6 +4,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
 import { Logo } from "@/components/logo"
+import { useAppLocale } from "@/components/providers/locale-provider"
+import { getDoctorCopy } from "@/lib/doctor-copy"
 import { cn } from "@/lib/utils"
 import { services } from "@/lib/services"
 import {
@@ -14,6 +16,7 @@ import {
   LogOut,
   Users,
   ClipboardCheck,
+  ListOrdered,
   BarChart3,
   Cog,
   Scan,
@@ -74,29 +77,32 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({ user }: DashboardSidebarProps) {
   const pathname = usePathname()
+  const { locale } = useAppLocale()
+  const copy = getDoctorCopy(locale)
 
   const patientNav = [
-    { name: "Главная", href: "/dashboard", icon: LayoutDashboard },
+    { name: copy.sidebar.dashboard, href: "/dashboard", icon: LayoutDashboard },
     ...services.map((s) => ({
       name: s.title,
       href: s.href,
       icon: iconMap[s.iconName] || Scan,
     })),
-    { name: "История", href: "/dashboard/history", icon: History },
+    { name: copy.sidebar.history, href: "/dashboard/history", icon: History },
   ]
 
   const doctorNav = [
-    { name: "Главная", href: "/doctor/dashboard", icon: LayoutDashboard },
-    { name: "Пациенты", href: "/doctor/patients", icon: Users },
-    { name: "На проверку", href: "/doctor/reviews", icon: ClipboardCheck },
-    { name: "Отчёты", href: "/doctor/reports", icon: FileText },
+    { name: copy.sidebar.dashboard, href: "/doctor/dashboard", icon: LayoutDashboard },
+    { name: copy.sidebar.patients, href: "/doctor/patients", icon: Users },
+    { name: copy.sidebar.worklist, href: "/doctor/worklist", icon: ListOrdered },
+    { name: copy.sidebar.reviews, href: "/doctor/reviews", icon: ClipboardCheck },
+    { name: copy.sidebar.reports, href: "/doctor/reports", icon: FileText },
   ]
 
   const adminNav = [
-    { name: "Главная", href: "/admin/dashboard", icon: LayoutDashboard },
-    { name: "Пользователи", href: "/admin/users", icon: Users },
-    { name: "Статистика", href: "/admin/stats", icon: BarChart3 },
-    { name: "Сервисы", href: "/admin/services", icon: Cog },
+    { name: copy.sidebar.dashboard, href: "/admin/dashboard", icon: LayoutDashboard },
+    { name: copy.sidebar.users, href: "/admin/users", icon: Users },
+    { name: copy.sidebar.stats, href: "/admin/stats", icon: BarChart3 },
+    { name: copy.sidebar.services, href: "/admin/services", icon: Cog },
   ]
 
   const navigation =
@@ -122,10 +128,10 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
           href="/dashboard/profile"
           className="block px-6 py-4 border-b border-border hover:bg-secondary/50 transition-colors"
         >
-          <p className="font-medium truncate">{user.name || "Пользователь"}</p>
+          <p className="font-medium truncate">{user.name || copy.common.profileFallback}</p>
           <p className="text-sm text-muted-foreground truncate">{user.email}</p>
           <span className="inline-block mt-2 px-2 py-0.5 text-xs rounded-full bg-secondary text-muted-foreground">
-            {user.role === "ADMIN" ? "Администратор" : user.role === "DOCTOR" ? "Врач" : "Пациент"}
+            {user.role === "ADMIN" ? copy.common.roles.admin : user.role === "DOCTOR" ? copy.common.roles.doctor : copy.common.roles.patient}
           </span>
         </Link>
 
@@ -163,7 +169,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
             )}
           >
             <User className="w-4 h-4" />
-            <span>Профиль</span>
+            <span>{copy.sidebar.profile}</span>
           </Link>
           <Link
             href={user.role === "DOCTOR" ? "/doctor/settings" : user.role === "ADMIN" ? "/admin/settings" : "/dashboard/settings"}
@@ -175,14 +181,14 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
             )}
           >
             <Settings className="w-4 h-4" />
-            <span>Настройки</span>
+            <span>{copy.sidebar.settings}</span>
           </Link>
           <button
             onClick={() => signOut({ callbackUrl: "/" })}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            <span>Выйти</span>
+            <span>{copy.sidebar.signOut}</span>
           </button>
         </div>
       </aside>
