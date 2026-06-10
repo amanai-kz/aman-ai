@@ -78,6 +78,84 @@ type DoctorCopy = {
     status: string
     aiSummary: string
     updated: string
+    viewerTitle: string
+    viewerDescription: string
+    viewerUnavailable: string
+    viewerUnavailableHint: string
+    sequences: string
+    sequenceLabels: {
+      t1: string
+      t2: string
+      flair: string
+      swi: string
+    }
+    sliceControl: string
+    zoomControls: string
+    zoomOut: string
+    zoomReset: string
+    zoomIn: string
+    windowControl: string
+    levelControl: string
+    metadataTitle: string
+    metadata: {
+      accession: string
+      modality: string
+      studyDate: string
+      series: string
+      slices: string
+      source: string
+      sourceValues: {
+        pacsSyncPlaceholder: string
+        structuredSourcePlaceholder: string
+      }
+    }
+    aiPanelTitle: string
+    aiGeneratedLabel: string
+    draftFindings: string
+    draftImpression: string
+    structuredFindings: string
+    evidenceList: string
+    confidenceScore: string
+    doctorReviewWarning: string
+    aiWarningTitle: string
+    generatedLabels: {
+      urgentNeuroradiologyFinding: string
+      neuroimagingReviewCandidate: string
+      physiologicTrendAlert: string
+      behavioralRiskScreeningSummary: string
+      aiTriageSummary: string
+    }
+    draftPrefixes: {
+      radiology: string
+      unavailable: string
+    }
+    impressionTemplates: {
+      critical: string
+      high: string
+      normal: string
+    }
+    structuredFindingLabels: {
+      primarySignal: string
+      supportingObservation: string
+      reviewMode: string
+    }
+    structuredFindingFallbacks: {
+      noFindings: string
+      noSecondaryObservation: string
+    }
+    reviewModeValues: {
+      radiology: string
+      unavailable: string
+    }
+    evidenceNotes: {
+      radiologyPlaceholder: string
+      unavailableViewer: string
+    }
+    actionButtons: {
+      editReport: string
+      approve: string
+      signOff: string
+    }
   }
   patientDetail: {
     pageTitle: string
@@ -183,6 +261,85 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
       status: "Статус",
       aiSummary: "Сводка AI-находок",
       updated: "Обновлено",
+      viewerTitle: "Просмотр исследования",
+      viewerDescription: "Плейсхолдер просмотра снимков для врачебного ревью без подключения реального DICOM-движка.",
+      viewerUnavailable: "Просмотрщик недоступен для этого типа исследования",
+      viewerUnavailableHint:
+        "Метаданные исследования и AI-черновик остаются доступны. Реальный просмотрщик будет подключён отдельно.",
+      sequences: "Последовательности",
+      sequenceLabels: {
+        t1: "T1",
+        t2: "T2",
+        flair: "FLAIR",
+        swi: "SWI",
+      },
+      sliceControl: "Срез",
+      zoomControls: "Масштаб",
+      zoomOut: "Уменьшить",
+      zoomReset: "Сбросить масштаб",
+      zoomIn: "Увеличить",
+      windowControl: "Окно",
+      levelControl: "Уровень",
+      metadataTitle: "Метаданные исследования",
+      metadata: {
+        accession: "Accession",
+        modality: "Модальность",
+        studyDate: "Дата исследования",
+        series: "Серии",
+        slices: "Срезы",
+        source: "Источник",
+        sourceValues: {
+          pacsSyncPlaceholder: "Плейсхолдер PACS-синхронизации",
+          structuredSourcePlaceholder: "Плейсхолдер структурированного источника",
+        },
+      },
+      aiPanelTitle: "AI-панель",
+      aiGeneratedLabel: "AI-метка",
+      draftFindings: "Черновик Findings",
+      draftImpression: "Черновик Impression",
+      structuredFindings: "Структурированные находки",
+      evidenceList: "Список подтверждений",
+      confidenceScore: "Уверенность",
+      doctorReviewWarning: "AI-результат нельзя использовать без проверки врачом и окончательного клинического решения.",
+      aiWarningTitle: "Обязательно проверьте результат AI",
+      generatedLabels: {
+        urgentNeuroradiologyFinding: "Вероятная срочная нейрорадиологическая находка",
+        neuroimagingReviewCandidate: "Кандидат на нейровизуализационное ревью",
+        physiologicTrendAlert: "Предупреждение о физиологическом тренде",
+        behavioralRiskScreeningSummary: "Сводка скрининга поведенческого риска",
+        aiTriageSummary: "AI-сводка для триажа",
+      },
+      draftPrefixes: {
+        radiology: "Черновик визуального ревью: ",
+        unavailable: "Черновик структурированного ревью: ",
+      },
+      impressionTemplates: {
+        critical: "Обнаружен паттерн высокой срочности.",
+        high: "Рекомендуется ускоренное ревью врачом.",
+        normal: "Немедленный критический паттерн не обнаружен.",
+      },
+      structuredFindingLabels: {
+        primarySignal: "Основной сигнал",
+        supportingObservation: "Поддерживающее наблюдение",
+        reviewMode: "Режим ревью",
+      },
+      structuredFindingFallbacks: {
+        noFindings: "AI пока не вернул конкретные находки.",
+        noSecondaryObservation: "Вторичное наблюдение пока не передано AI-конвейером.",
+      },
+      reviewModeValues: {
+        radiology: "Активен плейсхолдер радиологического просмотрщика для покадрового ревью по последовательностям.",
+        unavailable: "Активно состояние недоступного просмотрщика, поэтому ревью следует выполнять по метаданным и AI-сводке.",
+      },
+      evidenceNotes: {
+        radiologyPlaceholder: "Вкладки последовательностей и элементы управления изображением пока остаются UI-плейсхолдером до интеграции PACS или DICOM.",
+        unavailableViewer: "Для этого типа исследования радиологический просмотрщик пока недоступен, но AI-ревью остаётся доступным.",
+      },
+      actionButtons: {
+        editReport: "Редактировать отчёт",
+        approve: "Подтвердить",
+        signOff: "Подписать",
+      },
     },
     patientDetail: {
       pageTitle: "Карточка пациента",
@@ -287,6 +444,86 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
       status: "Status",
       aiSummary: "AI finding summary",
       updated: "Updated",
+      viewerTitle: "Study viewer",
+      viewerDescription: "Imaging viewer placeholder for doctor review until the real DICOM engine is connected.",
+      viewerUnavailable: "Viewer unavailable for this study type",
+      viewerUnavailableHint:
+        "Study metadata and the AI draft remain available. A dedicated viewer can be added separately later.",
+      sequences: "Sequences",
+      sequenceLabels: {
+        t1: "T1",
+        t2: "T2",
+        flair: "FLAIR",
+        swi: "SWI",
+      },
+      sliceControl: "Slice",
+      zoomControls: "Zoom",
+      zoomOut: "Zoom out",
+      zoomReset: "Reset zoom",
+      zoomIn: "Zoom in",
+      windowControl: "Window",
+      levelControl: "Level",
+      metadataTitle: "Study metadata",
+      metadata: {
+        accession: "Accession",
+        modality: "Modality",
+        studyDate: "Study date",
+        series: "Series",
+        slices: "Slices",
+        source: "Source",
+        sourceValues: {
+          pacsSyncPlaceholder: "PACS sync placeholder",
+          structuredSourcePlaceholder: "Structured source placeholder",
+        },
+      },
+      aiPanelTitle: "AI panel",
+      aiGeneratedLabel: "AI generated label",
+      draftFindings: "Draft Findings",
+      draftImpression: "Draft Impression",
+      structuredFindings: "Structured findings",
+      evidenceList: "Evidence list",
+      confidenceScore: "Confidence score",
+      doctorReviewWarning:
+        "AI output must be reviewed by a doctor before it is used in any report or clinical decision.",
+      aiWarningTitle: "Doctor review is required",
+      generatedLabels: {
+        urgentNeuroradiologyFinding: "Probable urgent neuroradiology finding",
+        neuroimagingReviewCandidate: "Neuroimaging review candidate",
+        physiologicTrendAlert: "Physiologic trend alert",
+        behavioralRiskScreeningSummary: "Behavioral risk screening summary",
+        aiTriageSummary: "AI triage summary",
+      },
+      draftPrefixes: {
+        radiology: "Imaging review draft: ",
+        unavailable: "Structured review draft: ",
+      },
+      impressionTemplates: {
+        critical: "High-acuity pattern detected.",
+        high: "Expedited physician review is recommended.",
+        normal: "No immediate critical pattern detected.",
+      },
+      structuredFindingLabels: {
+        primarySignal: "Primary signal",
+        supportingObservation: "Supporting observation",
+        reviewMode: "Review mode",
+      },
+      structuredFindingFallbacks: {
+        noFindings: "AI did not return specific findings yet.",
+        noSecondaryObservation: "No secondary observation supplied by the AI pipeline.",
+      },
+      reviewModeValues: {
+        radiology: "Radiology viewer placeholder active for sequence-by-sequence review.",
+        unavailable: "Viewer unavailable state active; review should rely on metadata and the AI summary.",
+      },
+      evidenceNotes: {
+        radiologyPlaceholder: "Sequence tabs and image controls are placeholder UI pending PACS or DICOM integration.",
+        unavailableViewer: "This study type does not have a radiology viewer yet; AI review remains available.",
+      },
+      actionButtons: {
+        editReport: "Edit report",
+        approve: "Approve",
+        signOff: "Sign off",
+      },
     },
     patientDetail: {
       pageTitle: "Patient card",
@@ -391,6 +628,86 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
       status: "Күйі",
       aiSummary: "AI қорытындысы",
       updated: "Жаңартылды",
+      viewerTitle: "Зерттеуді қарау",
+      viewerDescription: "Нақты DICOM қозғалтқышы қосылғанға дейін дәрігерлік тексеруге арналған сурет қарау плейсхолдері.",
+      viewerUnavailable: "Бұл зерттеу түрі үшін қарау құралы қолжетімсіз",
+      viewerUnavailableHint:
+        "Зерттеу метадеректері мен AI нобайы қолжетімді болып қалады. Арнайы қарау құралы кейін бөлек қосылады.",
+      sequences: "Тізбектер",
+      sequenceLabels: {
+        t1: "T1",
+        t2: "T2",
+        flair: "FLAIR",
+        swi: "SWI",
+      },
+      sliceControl: "Қима",
+      zoomControls: "Масштаб",
+      zoomOut: "Кішірейту",
+      zoomReset: "Масштабты қалпына келтіру",
+      zoomIn: "Үлкейту",
+      windowControl: "Терезе",
+      levelControl: "Деңгей",
+      metadataTitle: "Зерттеу метадеректері",
+      metadata: {
+        accession: "Accession",
+        modality: "Модальділік",
+        studyDate: "Зерттеу күні",
+        series: "Сериялар",
+        slices: "Қималар",
+        source: "Дерек көзі",
+        sourceValues: {
+          pacsSyncPlaceholder: "PACS синхрондау плейсхолдері",
+          structuredSourcePlaceholder: "Құрылымдалған дерек көзі плейсхолдері",
+        },
+      },
+      aiPanelTitle: "AI панелі",
+      aiGeneratedLabel: "AI белгісі",
+      draftFindings: "Findings нобайы",
+      draftImpression: "Impression нобайы",
+      structuredFindings: "Құрылымдалған қорытындылар",
+      evidenceList: "Дәлелдер тізімі",
+      confidenceScore: "Сенімділік деңгейі",
+      doctorReviewWarning:
+        "AI нәтижесін есепке немесе клиникалық шешімге қоспас бұрын дәрігер міндетті түрде тексеруі керек.",
+      aiWarningTitle: "AI нәтижесін міндетті түрде тексеріңіз",
+      generatedLabels: {
+        urgentNeuroradiologyFinding: "Шұғыл нейрорадиологиялық белгі болуы ықтимал",
+        neuroimagingReviewCandidate: "Нейровизуализациялық шолуға лайық жағдай",
+        physiologicTrendAlert: "Физиологиялық тренд туралы ескерту",
+        behavioralRiskScreeningSummary: "Мінез-құлық тәуекелін скрининг қорытындысы",
+        aiTriageSummary: "AI триаж қорытындысы",
+      },
+      draftPrefixes: {
+        radiology: "Визуалдық шолу нобайы: ",
+        unavailable: "Құрылымдалған шолу нобайы: ",
+      },
+      impressionTemplates: {
+        critical: "Жоғары жеделдікті үлгі анықталды.",
+        high: "Дәрігердің жеделдетілген шолуы ұсынылады.",
+        normal: "Дереу қауіп төндіретін критикалық үлгі анықталмады.",
+      },
+      structuredFindingLabels: {
+        primarySignal: "Негізгі белгі",
+        supportingObservation: "Қосымша бақылау",
+        reviewMode: "Қарау режимі",
+      },
+      structuredFindingFallbacks: {
+        noFindings: "AI әзірге нақты қорытынды қайтармады.",
+        noSecondaryObservation: "Екінші бақылау AI құбырынан әлі берілген жоқ.",
+      },
+      reviewModeValues: {
+        radiology: "Тізбек бойынша қарауға арналған радиология көрінісінің плейсхолдері белсенді.",
+        unavailable: "Қарау құралы қолжетімсіз күйде, сондықтан шолу метадеректер мен AI қорытындысына сүйенуі керек.",
+      },
+      evidenceNotes: {
+        radiologyPlaceholder: "Тізбек қойындылары мен суретті басқару элементтері PACS немесе DICOM интеграциясына дейін UI плейсхолдері болып қалады.",
+        unavailableViewer: "Бұл зерттеу түрі үшін радиология қарау құралы әлі жоқ, бірақ AI шолуы қолжетімді.",
+      },
+      actionButtons: {
+        editReport: "Есепті өңдеу",
+        approve: "Растау",
+        signOff: "Қол қою",
+      },
     },
     patientDetail: {
       pageTitle: "Пациент картасы",

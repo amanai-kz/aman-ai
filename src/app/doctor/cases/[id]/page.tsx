@@ -5,9 +5,9 @@ import { DoctorCaseDetailView } from "@/components/doctor-case-detail-view"
 import { DashboardBackground } from "@/components/dashboard-background"
 import { DashboardHeader } from "@/components/dashboard-header"
 import {
-  getMockDoctorWorklistCases,
-  mapRiskToPriority,
-} from "@/lib/doctor-worklist"
+  buildDoctorCaseDetail,
+  buildMockDoctorCaseDetail,
+} from "@/lib/doctor-case-detail"
 
 async function getCaseDetail(id: string) {
   try {
@@ -28,28 +28,23 @@ async function getCaseDetail(id: string) {
     })
 
     if (analysis) {
-      return {
+      return buildDoctorCaseDetail({
         id: analysis.id,
         patientName: analysis.patient.user.name || "",
         patientEmail: analysis.patient.user.email || "",
         studyType: analysis.serviceType,
-        priority: mapRiskToPriority(analysis.riskLevel),
         status: analysis.status,
-        aiSummary: analysis.findings.length > 0 ? analysis.findings.join(", ") : "",
-        updatedAt: analysis.updatedAt.toISOString(),
-      }
+        riskLevel: analysis.riskLevel,
+        findings: analysis.findings,
+        confidence: analysis.confidence,
+        updatedAt: analysis.updatedAt,
+      })
     }
   } catch {
     // Fallback to mock data below when local DB is not ready.
   }
 
-  const mockCase = getMockDoctorWorklistCases("ru").find((item) => item.id === id)
-  if (!mockCase) return null
-
-  return {
-    ...mockCase,
-    patientEmail: "mock@amanai.kz",
-  }
+  return buildMockDoctorCaseDetail(id)
 }
 
 export default async function DoctorCaseDetailPage({
