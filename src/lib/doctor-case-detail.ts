@@ -2,6 +2,13 @@ import { AnalysisStatus, RiskLevel, ServiceType } from "@prisma/client"
 
 import type { AppLocale } from "@/lib/app-locale"
 import { getDoctorCopy } from "@/lib/doctor-copy"
+import {
+  createReviewState,
+  type DoctorCaseAuditLog,
+  type DoctorCaseReviewState,
+  type ReviewAuditAction,
+  type ReviewWorkflowStatus,
+} from "@/lib/doctor-case-review"
 import { mapRiskToPriority, type DoctorWorklistPriority } from "@/lib/doctor-worklist"
 
 export type DoctorCaseViewerMode = "radiology" | "unavailable"
@@ -54,6 +61,9 @@ export interface DoctorCaseDetail {
     confidenceScore: number
     priority: DoctorWorklistPriority
   }
+  review: DoctorCaseReviewState
+  auditLogs: DoctorCaseAuditLog[]
+  persistenceUnavailable: boolean
 }
 
 export interface DoctorCaseAiPresentation {
@@ -77,6 +87,25 @@ type DoctorCaseDetailInput = {
   findings: string[]
   confidence?: number | null
   updatedAt: Date
+  review?: {
+    findingsDraft?: string | null
+    impressionDraft?: string | null
+    workflowStatus?: ReviewWorkflowStatus | null
+    signedAt?: Date | null
+    signedById?: string | null
+    signedByName?: string | null
+    criticalAcknowledgedAt?: Date | null
+    criticalAcknowledgedById?: string | null
+    criticalAcknowledgedByName?: string | null
+  } | null
+  auditLogs?: Array<{
+    action: ReviewAuditAction
+    actorId: string
+    actorName?: string | null
+    details?: Record<string, unknown> | null
+    createdAt: Date
+  }>
+  persistenceUnavailable?: boolean
 }
 
 const radiologySequences: DoctorCaseDetail["viewer"]["sequences"] = [
@@ -137,6 +166,25 @@ export function buildDoctorCaseDetail(input: DoctorCaseDetailInput): DoctorCaseD
       confidenceScore,
       priority,
     },
+    review: createReviewState({
+      findingsDraft: input.review?.findingsDraft ?? "",
+      impressionDraft: input.review?.impressionDraft ?? "",
+      workflowStatus: input.review?.workflowStatus ?? "DRAFT",
+      signedAt: input.review?.signedAt?.toISOString() ?? null,
+      signedById: input.review?.signedById ?? null,
+      signedByName: input.review?.signedByName ?? null,
+      criticalAcknowledgedAt: input.review?.criticalAcknowledgedAt?.toISOString() ?? null,
+      criticalAcknowledgedById: input.review?.criticalAcknowledgedById ?? null,
+      criticalAcknowledgedByName: input.review?.criticalAcknowledgedByName ?? null,
+    }),
+    auditLogs: (input.auditLogs ?? []).map((item) => ({
+      action: item.action,
+      actorId: item.actorId,
+      actorName: item.actorName ?? null,
+      details: item.details ?? null,
+      createdAt: item.createdAt.toISOString(),
+    })),
+    persistenceUnavailable: input.persistenceUnavailable ?? false,
   }
 }
 
@@ -271,5 +319,60 @@ export function getDoctorCaseAiPresentation(
       },
     ],
     evidence,
+  }
+}
+
+export function getDoctorCaseReportDrafts(detail: DoctorCaseDetail, locale: AppLocale) {
+  if (detail.review.findingsDraft || detail.review.impressionDraft) {
+    return {
+      findingsDraft: detail.review.findingsDraft,
+      impressionDraft: detail.review.impressionDraft,
+    }
+  }
+
+  const copy = getDoctorCopy(locale).caseDetail
+  const findings =
+    detail.ai.findings.length > 0
+      ? detail.ai.findings
+      : [copy.structuredFindingFallbacks.noFindings]
+
+  return {
+    findingsDraft: findings.join("\n"),
+    impressionDraft: getDoctorCaseAiPresentation(detail, locale).draftImpression,
+  }
+}
+
+export function getDoctorCaseReviewStatusLabel(
+  workflowStatus: ReviewWorkflowStatus,
+  locale: AppLocale
+) {
+  const statuses = getDoctorCopy(locale).caseDetail.reviewStatuses
+
+  if (workflowStatus === "SIGNED") return statuses.signed
+  if (workflowStatus === "EDITED") return statuses.edited
+  return statuses.draft
+}
+
+export function getDoctorCaseAuditActionLabel(
+  action: ReviewAuditAction,
+  locale: AppLocale
+) {
+  const labels = getDoctorCopy(locale).caseDetail.auditActions
+
+  switch (action) {
+    case "AI_DRAFT_VIEWED":
+      return labels.aiDraftViewed
+    case "REPORT_EDITED":
+      return labels.reportEdited
+    case "DRAFT_SAVED":
+      return labels.draftSaved
+    case "AI_DRAFT_ACCEPTED":
+      return labels.aiDraftAccepted
+    case "AI_DRAFT_REJECTED":
+      return labels.aiDraftRejected
+    case "REPORT_SIGNED_OFF":
+      return labels.reportSignedOff
+    case "CRITICAL_FINDING_ACKNOWLEDGED":
+      return labels.criticalFindingAcknowledged
   }
 }

@@ -9,8 +9,33 @@ import {
   buildMockDoctorCaseDetail,
 } from "@/lib/doctor-case-detail"
 
-async function getCaseDetail(id: string) {
+async function getCaseDetail(id: string, actor: { userId: string; name?: string | null }) {
   try {
+    const doctor = await db.doctor.findUnique({
+      where: { userId: actor.userId },
+      select: { id: true },
+    })
+
+    if (doctor) {
+      const review = await db.analysisReview.upsert({
+        where: { analysisId: id },
+        update: {},
+        create: {
+          analysisId: id,
+          doctorId: doctor.id,
+        },
+      })
+
+      await db.analysisReviewAuditLog.create({
+        data: {
+          analysisReviewId: review.id,
+          action: "AI_DRAFT_VIEWED",
+          actorId: actor.userId,
+          details: actor.name ? { actorName: actor.name } : undefined,
+        },
+      })
+    }
+
     const analysis = await db.analysis.findUnique({
       where: { id },
       include: {
@@ -24,10 +49,26 @@ async function getCaseDetail(id: string) {
             },
           },
         },
+        review: {
+          include: {
+            auditLogs: {
+              orderBy: { createdAt: "asc" },
+            },
+          },
+        },
       },
     })
 
     if (analysis) {
+      const signedByName = getActorNameFromAuditLogs(
+        analysis.review?.auditLogs ?? [],
+        analysis.review?.signedById
+      )
+      const criticalAcknowledgedByName = getActorNameFromAuditLogs(
+        analysis.review?.auditLogs ?? [],
+        analysis.review?.criticalAcknowledgedById
+      )
+
       return buildDoctorCaseDetail({
         id: analysis.id,
         patientName: analysis.patient.user.name || "",
@@ -38,13 +79,48 @@ async function getCaseDetail(id: string) {
         findings: analysis.findings,
         confidence: analysis.confidence,
         updatedAt: analysis.updatedAt,
+        review: analysis.review
+          ? {
+              findingsDraft: analysis.review.findingsDraft,
+              impressionDraft: analysis.review.impressionDraft,
+              workflowStatus: analysis.review.workflowStatus,
+              signedAt: analysis.review.signedAt,
+              signedById: analysis.review.signedById,
+              signedByName,
+              criticalAcknowledgedAt: analysis.review.criticalAcknowledgedAt,
+              criticalAcknowledgedById: analysis.review.criticalAcknowledgedById,
+              criticalAcknowledgedByName,
+            }
+          : null,
+        auditLogs: analysis.review?.auditLogs.map((item) => ({
+          action: item.action,
+          actorId: item.actorId,
+          actorName:
+            typeof item.details === "object" && item.details && "actorName" in item.details
+              ? (item.details as { actorName?: string | null }).actorName ?? null
+              : null,
+          details:
+            item.details && typeof item.details === "object"
+              ? (item.details as Record<string, unknown>)
+              : null,
+          createdAt: item.createdAt,
+        })),
       })
     }
   } catch {
     // Fallback to mock data below when local DB is not ready.
   }
 
-  return buildMockDoctorCaseDetail(id)
+  const mockDetail = buildMockDoctorCaseDetail(id)
+
+  if (!mockDetail) {
+    return null
+  }
+
+  return {
+    ...mockDetail,
+    persistenceUnavailable: true,
+  }
 }
 
 export default async function DoctorCaseDetailPage({
@@ -58,7 +134,10 @@ export default async function DoctorCaseDetailPage({
   if (session.user.role !== "DOCTOR") redirect("/dashboard")
 
   const { id } = await params
-  const detail = await getCaseDetail(id)
+  const detail = await getCaseDetail(id, {
+    userId: session.user.id,
+    name: session.user.name,
+  })
 
   if (!detail) {
     redirect("/doctor/worklist")
@@ -76,4 +155,20 @@ export default async function DoctorCaseDetailPage({
       </div>
     </>
   )
+}
+
+function getActorNameFromAuditLogs(
+  logs: Array<{ actorId: string; details: unknown }>,
+  actorId?: string | null
+) {
+  if (!actorId) return null
+
+  const match = logs.find((item) => item.actorId === actorId)
+  if (!match || typeof match.details !== "object" || !match.details) {
+    return null
+  }
+
+  return "actorName" in match.details
+    ? ((match.details as { actorName?: string | null }).actorName ?? null)
+    : null
 }

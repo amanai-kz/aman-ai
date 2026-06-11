@@ -151,10 +151,52 @@ type DoctorCopy = {
       radiologyPlaceholder: string
       unavailableViewer: string
     }
+    reportEditorTitle: string
+    reportEditorDescription: string
+    reportFields: {
+      findings: string
+      impression: string
+    }
+    reviewStatuses: {
+      draft: string
+      edited: string
+      signed: string
+    }
+    signedBy: string
+    signedAt: string
+    readOnlyBanner: string
+    dbFallbackBanner: string
+    auditTimelineTitle: string
+    auditEmpty: string
+    auditActions: {
+      aiDraftViewed: string
+      reportEdited: string
+      draftSaved: string
+      aiDraftAccepted: string
+      aiDraftRejected: string
+      reportSignedOff: string
+      criticalFindingAcknowledged: string
+    }
+    errorMessages: {
+      reportReadOnly: string
+      criticalAlreadyAcknowledged: string
+      criticalAckRequired: string
+      unsupportedReviewAction: string
+      reviewPersistenceUnavailable: string
+      updateFailed: string
+    }
+    criticalAlertTitle: string
+    criticalAlertDescription: string
+    criticalAcknowledged: string
+    criticalAcknowledgedAt: string
+    criticalAcknowledgeAction: string
     actionButtons: {
       editReport: string
       approve: string
       signOff: string
+      saveDraft: string
+      acceptAiDraft: string
+      rejectAiDraft: string
     }
   }
   patientDetail: {
@@ -295,8 +337,8 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
       },
       aiPanelTitle: "AI-панель",
       aiGeneratedLabel: "AI-метка",
-      draftFindings: "Черновик Findings",
-      draftImpression: "Черновик Impression",
+      draftFindings: "Черновик находок",
+      draftImpression: "Черновик заключения",
       structuredFindings: "Структурированные находки",
       evidenceList: "Список подтверждений",
       confidenceScore: "Уверенность",
@@ -335,10 +377,52 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
         radiologyPlaceholder: "Вкладки последовательностей и элементы управления изображением пока остаются UI-плейсхолдером до интеграции PACS или DICOM.",
         unavailableViewer: "Для этого типа исследования радиологический просмотрщик пока недоступен, но AI-ревью остаётся доступным.",
       },
+      reportEditorTitle: "Редактирование отчёта",
+      reportEditorDescription: "Проверьте AI-черновик, при необходимости отредактируйте Findings и Impression, затем сохраните или подпишите отчёт.",
+      reportFields: {
+        findings: "Находки",
+        impression: "Заключение",
+      },
+      reviewStatuses: {
+        draft: "Черновик",
+        edited: "Отредактировано",
+        signed: "Подписано",
+      },
+      signedBy: "Подписал",
+      signedAt: "Время подписи",
+      readOnlyBanner: "После подписи поля становятся только для чтения.",
+      dbFallbackBanner: "Не удалось сохранить врачебное ревью в базе данных. Показан резервный режим только для чтения.",
+      auditTimelineTitle: "История аудита",
+      auditEmpty: "Аудит событий для этого случая пока отсутствует.",
+      auditActions: {
+        aiDraftViewed: "AI-черновик открыт",
+        reportEdited: "Отчёт изменён",
+        draftSaved: "Черновик сохранён",
+        aiDraftAccepted: "AI-черновик принят",
+        aiDraftRejected: "AI-черновик отклонён",
+        reportSignedOff: "Отчёт подписан",
+        criticalFindingAcknowledged: "Критическая находка подтверждена",
+      },
+      errorMessages: {
+        reportReadOnly: "Подписанный отчёт доступен только для чтения.",
+        criticalAlreadyAcknowledged: "Критическая находка уже подтверждена.",
+        criticalAckRequired: "Перед подписью нужно подтвердить критическую находку.",
+        unsupportedReviewAction: "Это действие врачебного ревью не поддерживается.",
+        reviewPersistenceUnavailable: "Не удалось сохранить врачебное ревью в базе данных.",
+        updateFailed: "Не удалось обновить врачебное ревью.",
+      },
+      criticalAlertTitle: "Критическая находка требует подтверждения",
+      criticalAlertDescription: "Подтвердите, что вы увидели критическую находку, прежде чем завершать ревью.",
+      criticalAcknowledged: "Критическая находка подтверждена",
+      criticalAcknowledgedAt: "Подтверждено",
+      criticalAcknowledgeAction: "Подтвердить критическую находку",
       actionButtons: {
         editReport: "Редактировать отчёт",
         approve: "Подтвердить",
         signOff: "Подписать",
+        saveDraft: "Сохранить черновик",
+        acceptAiDraft: "Принять AI-черновик",
+        rejectAiDraft: "Отклонить AI-черновик",
       },
     },
     patientDetail: {
@@ -478,8 +562,8 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
       },
       aiPanelTitle: "AI panel",
       aiGeneratedLabel: "AI generated label",
-      draftFindings: "Draft Findings",
-      draftImpression: "Draft Impression",
+      draftFindings: "Draft findings",
+      draftImpression: "Draft impression",
       structuredFindings: "Structured findings",
       evidenceList: "Evidence list",
       confidenceScore: "Confidence score",
@@ -519,10 +603,52 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
         radiologyPlaceholder: "Sequence tabs and image controls are placeholder UI pending PACS or DICOM integration.",
         unavailableViewer: "This study type does not have a radiology viewer yet; AI review remains available.",
       },
+      reportEditorTitle: "Report editor",
+      reportEditorDescription: "Review the AI draft, edit Findings and Impression if needed, then save or sign the report.",
+      reportFields: {
+        findings: "Findings",
+        impression: "Impression",
+      },
+      reviewStatuses: {
+        draft: "Draft",
+        edited: "Edited",
+        signed: "Signed",
+      },
+      signedBy: "Signed by",
+      signedAt: "Signed at",
+      readOnlyBanner: "Signed reports are locked and read-only.",
+      dbFallbackBanner: "Doctor review persistence is temporarily unavailable. A read-only fallback is being shown.",
+      auditTimelineTitle: "Audit timeline",
+      auditEmpty: "No audit events are recorded for this case yet.",
+      auditActions: {
+        aiDraftViewed: "AI draft viewed",
+        reportEdited: "Report edited",
+        draftSaved: "Draft saved",
+        aiDraftAccepted: "AI draft accepted",
+        aiDraftRejected: "AI draft rejected",
+        reportSignedOff: "Report signed off",
+        criticalFindingAcknowledged: "Critical finding acknowledged",
+      },
+      errorMessages: {
+        reportReadOnly: "Signed reports are read-only.",
+        criticalAlreadyAcknowledged: "Critical finding has already been acknowledged.",
+        criticalAckRequired: "A critical finding must be acknowledged before sign-off.",
+        unsupportedReviewAction: "This doctor review action is not supported.",
+        reviewPersistenceUnavailable: "Doctor review persistence is unavailable.",
+        updateFailed: "Doctor review update failed.",
+      },
+      criticalAlertTitle: "Critical finding requires acknowledgement",
+      criticalAlertDescription: "Acknowledge that you have seen the critical finding before completing the review.",
+      criticalAcknowledged: "Critical finding acknowledged",
+      criticalAcknowledgedAt: "Acknowledged",
+      criticalAcknowledgeAction: "Acknowledge critical finding",
       actionButtons: {
         editReport: "Edit report",
         approve: "Approve",
         signOff: "Sign off",
+        saveDraft: "Save draft",
+        acceptAiDraft: "Accept AI draft",
+        rejectAiDraft: "Reject AI draft",
       },
     },
     patientDetail: {
@@ -662,8 +788,8 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
       },
       aiPanelTitle: "AI панелі",
       aiGeneratedLabel: "AI белгісі",
-      draftFindings: "Findings нобайы",
-      draftImpression: "Impression нобайы",
+      draftFindings: "Қорытынды нобайы",
+      draftImpression: "Түйін нобайы",
       structuredFindings: "Құрылымдалған қорытындылар",
       evidenceList: "Дәлелдер тізімі",
       confidenceScore: "Сенімділік деңгейі",
@@ -703,10 +829,52 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
         radiologyPlaceholder: "Тізбек қойындылары мен суретті басқару элементтері PACS немесе DICOM интеграциясына дейін UI плейсхолдері болып қалады.",
         unavailableViewer: "Бұл зерттеу түрі үшін радиология қарау құралы әлі жоқ, бірақ AI шолуы қолжетімді.",
       },
+      reportEditorTitle: "Есеп редакторы",
+      reportEditorDescription: "AI нобайын тексеріп, қажет болса Findings пен Impression өрістерін түзетіңіз, содан кейін есепті сақтаңыз немесе қол қойыңыз.",
+      reportFields: {
+        findings: "Қорытындылар",
+        impression: "Түйін",
+      },
+      reviewStatuses: {
+        draft: "Нобай",
+        edited: "Өңделді",
+        signed: "Қол қойылды",
+      },
+      signedBy: "Қол қойған дәрігер",
+      signedAt: "Қол қойылған уақыт",
+      readOnlyBanner: "Қол қойылған есептер тек оқу режиміне өтеді.",
+      dbFallbackBanner: "Дәрігерлік шолуды дерекқорға сақтау уақытша қолжетімсіз. Қазір тек оқуға арналған резервтік көрініс көрсетіледі.",
+      auditTimelineTitle: "Аудит тарихы",
+      auditEmpty: "Бұл жағдай үшін аудит оқиғалары әлі жазылмаған.",
+      auditActions: {
+        aiDraftViewed: "AI нобайы ашылды",
+        reportEdited: "Есеп өңделді",
+        draftSaved: "Нобай сақталды",
+        aiDraftAccepted: "AI нобайы қабылданды",
+        aiDraftRejected: "AI нобайы қабылданбады",
+        reportSignedOff: "Есепке қол қойылды",
+        criticalFindingAcknowledged: "Критикалық қорытынды расталды",
+      },
+      errorMessages: {
+        reportReadOnly: "Қол қойылған есеп тек оқу үшін қолжетімді.",
+        criticalAlreadyAcknowledged: "Критикалық қорытынды әлдеқашан расталған.",
+        criticalAckRequired: "Қол қою алдында критикалық қорытындыны растау керек.",
+        unsupportedReviewAction: "Дәрігерлік шолудың бұл әрекеті қолдау таппайды.",
+        reviewPersistenceUnavailable: "Дәрігерлік шолуды дерекқорға сақтау қолжетімсіз.",
+        updateFailed: "Дәрігерлік шолуды жаңарту мүмкін болмады.",
+      },
+      criticalAlertTitle: "Критикалық қорытындыны растау қажет",
+      criticalAlertDescription: "Шолуды аяқтамас бұрын критикалық қорытындыны көргеніңізді растаңыз.",
+      criticalAcknowledged: "Критикалық қорытынды расталды",
+      criticalAcknowledgedAt: "Расталған уақыты",
+      criticalAcknowledgeAction: "Критикалық қорытындыны растау",
       actionButtons: {
         editReport: "Есепті өңдеу",
         approve: "Растау",
         signOff: "Қол қою",
+        saveDraft: "Нобайды сақтау",
+        acceptAiDraft: "AI нобайын қабылдау",
+        rejectAiDraft: "AI нобайын қабылдамау",
       },
     },
     patientDetail: {

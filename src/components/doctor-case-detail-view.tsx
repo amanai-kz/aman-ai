@@ -1,13 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, Search, ZoomIn, ZoomOut } from "lucide-react"
 
 import {
+  getDoctorCaseAuditActionLabel,
   getDoctorCaseAiPresentation,
+  getDoctorCaseReportDrafts,
+  getDoctorCaseReviewStatusLabel,
   type DoctorCaseDetail,
 } from "@/lib/doctor-case-detail"
+import { createReviewState } from "@/lib/doctor-case-review"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,6 +23,7 @@ import {
 } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
 import { useAppLocale } from "@/components/providers/locale-provider"
 import { APP_DISPLAY_TIME_ZONE, getIntlLocale, type AppLocale } from "@/lib/app-locale"
 import { getDoctorCopy } from "@/lib/doctor-copy"
@@ -29,6 +34,11 @@ import {
   getStudyTypeLabel,
 } from "@/lib/doctor-worklist"
 import { useIsHydrated } from "@/components/use-is-hydrated"
+
+type ReviewErrorPayload = {
+  error?: string
+  errorKey?: string
+}
 
 function formatCaseDate(value: string, locale: AppLocale) {
   return new Intl.DateTimeFormat(getIntlLocale(locale), {
@@ -42,12 +52,20 @@ export function DoctorCaseDetailView({ detail }: { detail: DoctorCaseDetail }) {
   const { locale } = useAppLocale()
   const copy = getDoctorCopy(locale)
   const aiPresentation = getDoctorCaseAiPresentation(detail, locale)
+  const initialDrafts = getDoctorCaseReportDrafts(detail, locale)
   const initialSequence = detail.viewer.sequences[0]?.id ?? "t1"
   const isHydrated = useIsHydrated()
   const [activeSequence, setActiveSequence] = useState(initialSequence)
   const [sliceValue, setSliceValue] = useState([detail.viewer.controls.slice.value])
   const [windowValue, setWindowValue] = useState([detail.viewer.controls.window])
   const [levelValue, setLevelValue] = useState([detail.viewer.controls.level])
+  const [review, setReview] = useState(detail.review)
+  const [auditLogs, setAuditLogs] = useState(detail.auditLogs)
+  const [findingsDraft, setFindingsDraft] = useState(initialDrafts.findingsDraft)
+  const [impressionDraft, setImpressionDraft] = useState(initialDrafts.impressionDraft)
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [requestError, setRequestError] = useState("")
 
   const activeSequenceLabel =
     activeSequence === "t2"
@@ -79,6 +97,88 @@ export function DoctorCaseDetailView({ detail }: { detail: DoctorCaseDetail }) {
     },
   ]
 
+  useEffect(() => {
+    const nextDrafts = getDoctorCaseReportDrafts(detail, locale)
+    setReview(detail.review)
+    setAuditLogs(detail.auditLogs)
+    setFindingsDraft(nextDrafts.findingsDraft)
+    setImpressionDraft(nextDrafts.impressionDraft)
+    setIsEditing(false)
+    setRequestError("")
+  }, [detail, locale])
+
+  const reviewStatusLabel = getDoctorCaseReviewStatusLabel(review.workflowStatus, locale)
+  const isSigned = review.workflowStatus === "SIGNED" || review.isLocked
+  const canEdit = !isSigned && !detail.persistenceUnavailable
+  const requiresCriticalAcknowledgement =
+    detail.priority === "CRITICAL" && !review.criticalAcknowledgedAt
+
+  async function submitReviewAction(action: "saveDraft" | "acceptAiDraft" | "rejectAiDraft" | "acknowledgeCritical" | "signOff") {
+    setIsSubmitting(true)
+    setRequestError("")
+
+    try {
+      const response = await fetch(`/api/doctor/cases/${detail.id}/review`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action,
+          findingsDraft,
+          impressionDraft,
+        }),
+      })
+
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(getReviewRequestErrorMessage(copy.caseDetail.errorMessages, payload))
+      }
+
+      if (payload.review) {
+        const nextReview = createReviewState({
+          findingsDraft: payload.review.findingsDraft ?? "",
+          impressionDraft: payload.review.impressionDraft ?? "",
+          workflowStatus: payload.review.workflowStatus ?? "DRAFT",
+          signedAt: payload.review.signedAt ?? null,
+          signedById: payload.review.signedById ?? null,
+          signedByName: getActorName(payload.review.auditLogs, payload.review.signedById),
+          criticalAcknowledgedAt: payload.review.criticalAcknowledgedAt ?? null,
+          criticalAcknowledgedById: payload.review.criticalAcknowledgedById ?? null,
+          criticalAcknowledgedByName: getActorName(
+            payload.review.auditLogs,
+            payload.review.criticalAcknowledgedById
+          ),
+        })
+
+        setReview(nextReview)
+        setAuditLogs(
+          (payload.review.auditLogs ?? []).map((item: {
+            action: string
+            actorId: string
+            details?: Record<string, unknown> | null
+            createdAt: string
+          }) => ({
+            action: item.action,
+            actorId: item.actorId,
+            actorName: getActorName([item], item.actorId),
+            details: item.details ?? null,
+            createdAt: item.createdAt,
+          }))
+        )
+        setFindingsDraft(payload.review.findingsDraft ?? "")
+        setImpressionDraft(payload.review.impressionDraft ?? "")
+        setIsEditing(false)
+      }
+    } catch (error) {
+      setRequestError(
+        error instanceof Error ? error.message : copy.caseDetail.errorMessages.updateFailed
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -95,6 +195,9 @@ export function DoctorCaseDetailView({ detail }: { detail: DoctorCaseDetail }) {
               {getPriorityLabel(detail.priority, locale)}
             </Badge>
             <Badge variant="secondary">{getStatusLabel(detail.status, locale)}</Badge>
+            <Badge variant="outline" className="border-violet-200 bg-violet-500/10 text-violet-700">
+              {reviewStatusLabel}
+            </Badge>
             <Badge variant="outline" className="border-sky-200 bg-sky-500/10 text-sky-700">
               {getStudyTypeLabel(detail.studyType, locale)}
             </Badge>
@@ -108,6 +211,12 @@ export function DoctorCaseDetailView({ detail }: { detail: DoctorCaseDetail }) {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(22rem,1fr)]">
         <section aria-labelledby="study-viewer-title" className="space-y-6">
+          {detail.persistenceUnavailable && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-500/10 px-4 py-3 text-sm text-amber-800">
+              {copy.caseDetail.dbFallbackBanner}
+            </div>
+          )}
+
           <Card className="border-border bg-background/70 backdrop-blur-sm">
             <CardHeader>
               <CardTitle id="study-viewer-title">{copy.caseDetail.viewerTitle}</CardTitle>
@@ -310,6 +419,85 @@ export function DoctorCaseDetailView({ detail }: { detail: DoctorCaseDetail }) {
                 </div>
               </div>
 
+              {detail.priority === "CRITICAL" && (
+                <div className="rounded-2xl border border-red-200 bg-red-500/10 p-4 text-red-950">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold">{copy.caseDetail.criticalAlertTitle}</h3>
+                      <p className="text-sm text-red-900/80">{copy.caseDetail.criticalAlertDescription}</p>
+                      {review.criticalAcknowledgedAt && (
+                        <p className="text-xs text-red-900/80">
+                          {copy.caseDetail.criticalAcknowledgedAt}:{" "}
+                          {isHydrated ? formatCaseDate(review.criticalAcknowledgedAt, locale) : ""}
+                        </p>
+                      )}
+                    </div>
+
+                    {review.criticalAcknowledgedAt ? (
+                      <Badge variant="outline" className="border-red-300 bg-white/80 text-red-800">
+                        {copy.caseDetail.criticalAcknowledged}
+                      </Badge>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => submitReviewAction("acknowledgeCritical")}
+                        disabled={isSubmitting || detail.persistenceUnavailable}
+                      >
+                        {copy.caseDetail.criticalAcknowledgeAction}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-border bg-secondary/20 p-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold">{copy.caseDetail.reportEditorTitle}</h3>
+                  <p className="text-sm text-muted-foreground">{copy.caseDetail.reportEditorDescription}</p>
+                </div>
+
+                {isSigned && (
+                  <p className="mt-3 text-sm text-muted-foreground">{copy.caseDetail.readOnlyBanner}</p>
+                )}
+
+                <div className="mt-4 space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="doctor-findings-draft" className="text-sm font-medium">
+                      {copy.caseDetail.reportFields.findings}
+                    </label>
+                    <Textarea
+                      id="doctor-findings-draft"
+                      value={findingsDraft}
+                      onChange={(event) => {
+                        setFindingsDraft(event.target.value)
+                        setIsEditing(true)
+                      }}
+                      readOnly={!canEdit}
+                      aria-readonly={!canEdit}
+                      className="min-h-28 bg-background/80"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="doctor-impression-draft" className="text-sm font-medium">
+                      {copy.caseDetail.reportFields.impression}
+                    </label>
+                    <Textarea
+                      id="doctor-impression-draft"
+                      value={impressionDraft}
+                      onChange={(event) => {
+                        setImpressionDraft(event.target.value)
+                        setIsEditing(true)
+                      }}
+                      readOnly={!canEdit}
+                      aria-readonly={!canEdit}
+                      className="min-h-24 bg-background/80"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <h3 className="text-sm font-medium">{copy.caseDetail.structuredFindings}</h3>
                 <div className="mt-3 space-y-3">
@@ -343,16 +531,81 @@ export function DoctorCaseDetailView({ detail }: { detail: DoctorCaseDetail }) {
                 </div>
               </div>
 
+              {requestError && (
+                <div className="rounded-2xl border border-red-200 bg-red-500/10 px-4 py-3 text-sm text-red-800">
+                  {requestError}
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-3 pt-2">
-                <Button type="button" variant="outline">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditing((value) => !value)}
+                  disabled={!canEdit || isSubmitting}
+                >
                   {copy.caseDetail.actionButtons.editReport}
                 </Button>
-                <Button type="button" variant="secondary">
-                  {copy.caseDetail.actionButtons.approve}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => submitReviewAction("saveDraft")}
+                  disabled={!canEdit || isSubmitting || (!isEditing && !findingsDraft && !impressionDraft)}
+                >
+                  {copy.caseDetail.actionButtons.saveDraft}
                 </Button>
-                <Button type="button">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => submitReviewAction("acceptAiDraft")}
+                  disabled={!canEdit || isSubmitting}
+                >
+                  {copy.caseDetail.actionButtons.acceptAiDraft}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => submitReviewAction("rejectAiDraft")}
+                  disabled={!canEdit || isSubmitting}
+                >
+                  {copy.caseDetail.actionButtons.rejectAiDraft}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => submitReviewAction("signOff")}
+                  disabled={!canEdit || isSubmitting || requiresCriticalAcknowledgement}
+                >
                   {copy.caseDetail.actionButtons.signOff}
                 </Button>
+              </div>
+
+              {review.signedById && review.signedAt && (
+                <div className="rounded-2xl border border-border bg-secondary/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{copy.caseDetail.signedBy}</p>
+                  <p className="mt-2 text-sm font-medium">{review.signedByName || review.signedById}</p>
+                  <p className="mt-3 text-xs uppercase tracking-wide text-muted-foreground">{copy.caseDetail.signedAt}</p>
+                  <p className="mt-2 text-sm">{isHydrated ? formatCaseDate(review.signedAt, locale) : ""}</p>
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-border bg-secondary/20 p-4">
+                <h3 className="text-sm font-semibold">{copy.caseDetail.auditTimelineTitle}</h3>
+                {auditLogs.length === 0 ? (
+                  <p className="mt-3 text-sm text-muted-foreground">{copy.caseDetail.auditEmpty}</p>
+                ) : (
+                  <ol className="mt-3 space-y-3">
+                    {auditLogs.map((item) => (
+                      <li key={`${item.action}-${item.createdAt}-${item.actorId}`} className="rounded-2xl border border-border bg-background/70 px-4 py-3">
+                        <p className="text-sm font-medium">{getDoctorCaseAuditActionLabel(item.action, locale)}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {item.actorName || item.actorId}
+                          {" · "}
+                          {isHydrated ? formatCaseDate(item.createdAt, locale) : ""}
+                        </p>
+                      </li>
+                    ))}
+                  </ol>
+                )}
               </div>
 
               <div className="rounded-2xl border border-border bg-secondary/20 p-4">
@@ -367,4 +620,39 @@ export function DoctorCaseDetailView({ detail }: { detail: DoctorCaseDetail }) {
       </div>
     </div>
   )
+}
+
+function getActorName(
+  logs: Array<{
+    actorId: string
+    details?: Record<string, unknown> | null
+  }>,
+  actorId?: string | null
+) {
+  if (!actorId) return null
+
+  const match = logs.find((item) => item.actorId === actorId)
+  if (!match?.details) return null
+
+  return typeof match.details.actorName === "string" ? match.details.actorName : null
+}
+
+function getReviewRequestErrorMessage(
+  errorMessages: ReturnType<typeof getDoctorCopy>["caseDetail"]["errorMessages"],
+  payload: ReviewErrorPayload
+) {
+  switch (payload.errorKey) {
+    case "REPORT_READ_ONLY":
+      return errorMessages.reportReadOnly
+    case "CRITICAL_ALREADY_ACKNOWLEDGED":
+      return errorMessages.criticalAlreadyAcknowledged
+    case "CRITICAL_ACK_REQUIRED":
+      return errorMessages.criticalAckRequired
+    case "UNSUPPORTED_REVIEW_ACTION":
+      return errorMessages.unsupportedReviewAction
+    case "REVIEW_PERSISTENCE_UNAVAILABLE":
+      return errorMessages.reviewPersistenceUnavailable
+    default:
+      return payload.error || errorMessages.updateFailed
+  }
 }
