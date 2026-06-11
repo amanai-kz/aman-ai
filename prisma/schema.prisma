@@ -187,6 +187,13 @@ model AnalysisReview {
   verified    Boolean  @default(false) // Doctor confirms AI result
   notes       String?  @db.Text        // Doctor's notes
   diagnosis   String?                   // Final diagnosis
+  findingsDraft String? @db.Text
+  impressionDraft String? @db.Text
+  workflowStatus ReviewWorkflowStatus @default(DRAFT)
+  signedAt DateTime?
+  signedById String?
+  criticalAcknowledgedAt DateTime?
+  criticalAcknowledgedById String?
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -194,8 +201,23 @@ model AnalysisReview {
   // Relations
   analysis    Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
   doctor      Doctor   @relation(fields: [doctorId], references: [id])
+  auditLogs   AnalysisReviewAuditLog[]
 
   @@map("analysis_reviews")
+}
+
+model AnalysisReviewAuditLog {
+  id               String   @id @default(cuid())
+  analysisReviewId String
+  action           ReviewAuditAction
+  actorId          String
+  details          Json?
+  createdAt        DateTime @default(now())
+
+  analysisReview   AnalysisReview @relation(fields: [analysisReviewId], references: [id], onDelete: Cascade)
+
+  @@index([analysisReviewId, createdAt])
+  @@map("analysis_review_audit_logs")
 }
 
 // ============================================
@@ -451,4 +473,20 @@ enum RiskLevel {
   MODERATE
   HIGH
   CRITICAL
+}
+
+enum ReviewWorkflowStatus {
+  DRAFT
+  EDITED
+  SIGNED
+}
+
+enum ReviewAuditAction {
+  AI_DRAFT_VIEWED
+  REPORT_EDITED
+  DRAFT_SAVED
+  AI_DRAFT_ACCEPTED
+  AI_DRAFT_REJECTED
+  REPORT_SIGNED_OFF
+  CRITICAL_FINDING_ACKNOWLEDGED
 }
