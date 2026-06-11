@@ -22,6 +22,7 @@ import {
   getStudyTypeLabel,
   type DoctorWorklistCase,
 } from "@/lib/doctor-worklist"
+import { useIsHydrated } from "@/components/use-is-hydrated"
 
 export function DoctorWorklistView({
   cases,
@@ -32,6 +33,7 @@ export function DoctorWorklistView({
 }) {
   const { locale } = useAppLocale()
   const copy = getDoctorCopy(locale)
+  const isHydrated = useIsHydrated()
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -89,11 +91,15 @@ export function DoctorWorklistView({
                   {item.aiSummary || copy.worklist.noSummary}
                 </TableCell>
                 <TableCell className="px-4 py-4 text-sm text-muted-foreground">
-                  {new Intl.DateTimeFormat(getIntlLocale(locale), {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                    timeZone: APP_DISPLAY_TIME_ZONE,
-                  }).format(new Date(item.updatedAt))}
+                  <time dateTime={item.updatedAt} suppressHydrationWarning>
+                    {isHydrated
+                      ? new Intl.DateTimeFormat(getIntlLocale(locale), {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                          timeZone: APP_DISPLAY_TIME_ZONE,
+                        }).format(new Date(item.updatedAt))
+                      : ""}
+                  </time>
                 </TableCell>
                 <TableCell className="px-4 py-4 text-right">
                   <Button size="sm" className="gap-2" asChild>
