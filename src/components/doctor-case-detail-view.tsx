@@ -135,25 +135,27 @@ export function DoctorCaseDetailView({ detail }: { detail: DoctorCaseDetail }) {
         throw new Error(getReviewRequestErrorMessage(copy.caseDetail.errorMessages, payload))
       }
 
-      if (payload.review) {
+      const reviewPayload = payload.data?.review ?? payload.review
+
+      if (reviewPayload) {
         const nextReview = createReviewState({
-          findingsDraft: payload.review.findingsDraft ?? "",
-          impressionDraft: payload.review.impressionDraft ?? "",
-          workflowStatus: payload.review.workflowStatus ?? "DRAFT",
-          signedAt: payload.review.signedAt ?? null,
-          signedById: payload.review.signedById ?? null,
-          signedByName: getActorName(payload.review.auditLogs, payload.review.signedById),
-          criticalAcknowledgedAt: payload.review.criticalAcknowledgedAt ?? null,
-          criticalAcknowledgedById: payload.review.criticalAcknowledgedById ?? null,
+          findingsDraft: reviewPayload.findingsDraft ?? "",
+          impressionDraft: reviewPayload.impressionDraft ?? "",
+          workflowStatus: reviewPayload.workflowStatus ?? "DRAFT",
+          signedAt: reviewPayload.signedAt ?? null,
+          signedById: reviewPayload.signedById ?? null,
+          signedByName: getActorName(reviewPayload.auditLogs, reviewPayload.signedById),
+          criticalAcknowledgedAt: reviewPayload.criticalAcknowledgedAt ?? null,
+          criticalAcknowledgedById: reviewPayload.criticalAcknowledgedById ?? null,
           criticalAcknowledgedByName: getActorName(
-            payload.review.auditLogs,
-            payload.review.criticalAcknowledgedById
+            reviewPayload.auditLogs,
+            reviewPayload.criticalAcknowledgedById
           ),
         })
 
         setReview(nextReview)
         setAuditLogs(
-          (payload.review.auditLogs ?? []).map((item: {
+          (reviewPayload.auditLogs ?? []).map((item: {
             action: string
             actorId: string
             details?: Record<string, unknown> | null
@@ -166,8 +168,8 @@ export function DoctorCaseDetailView({ detail }: { detail: DoctorCaseDetail }) {
             createdAt: item.createdAt,
           }))
         )
-        setFindingsDraft(payload.review.findingsDraft ?? "")
-        setImpressionDraft(payload.review.impressionDraft ?? "")
+        setFindingsDraft(reviewPayload.findingsDraft ?? "")
+        setImpressionDraft(reviewPayload.impressionDraft ?? "")
         setIsEditing(false)
       }
     } catch (error) {

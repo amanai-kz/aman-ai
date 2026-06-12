@@ -4,6 +4,7 @@ export type DoctorCaseReviewErrorKey =
   | "CRITICAL_ACK_REQUIRED"
   | "UNSUPPORTED_REVIEW_ACTION"
   | "REVIEW_PERSISTENCE_UNAVAILABLE"
+  | "INTERNAL_ERROR"
 
 export class DoctorCaseReviewError extends Error {
   readonly errorKey: DoctorCaseReviewErrorKey
@@ -31,8 +32,8 @@ export function getDoctorCaseReviewErrorPayload(error: unknown) {
   }
 
   return {
-    error: "Doctor review persistence is unavailable",
-    errorKey: "REVIEW_PERSISTENCE_UNAVAILABLE" as const,
-    status: 503,
+    error: "Unexpected server error",
+    errorKey: "INTERNAL_ERROR" as const,
+    status: 500,
   }
 }
