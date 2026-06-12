@@ -88,7 +88,9 @@ export function DoctorWorklistView({
                   <Badge variant="secondary">{getStatusLabel(item.status, locale)}</Badge>
                 </TableCell>
                 <TableCell className="max-w-[320px] px-4 py-4 text-sm text-muted-foreground whitespace-normal">
-                  {item.aiSummary || copy.worklist.noSummary}
+                  {item.mockSummaryKey
+                    ? copy.worklist.mockSummaries[item.mockSummaryKey]
+                    : item.aiSummary || copy.worklist.noSummary}
                 </TableCell>
                 <TableCell className="px-4 py-4 text-sm text-muted-foreground">
                   <time dateTime={item.updatedAt} suppressHydrationWarning>

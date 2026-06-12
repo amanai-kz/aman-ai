@@ -1,14 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useAppLocale } from "@/components/providers/locale-provider"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardBackground } from "@/components/dashboard-background"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { getDoctorReportsCopy } from "@/lib/doctor-reports"
 import { 
   FileText, 
   Search,
-  Calendar,
   Clock,
   Download,
   ChevronRight,
@@ -40,6 +41,8 @@ interface VoiceReport {
 }
 
 export default function DoctorReportsPage() {
+  const { locale } = useAppLocale()
+  const copy = getDoctorReportsCopy(locale)
   const [reports, setReports] = useState<VoiceReport[]>([])
   const [selectedReport, setSelectedReport] = useState<VoiceReport | null>(null)
   const [loading, setLoading] = useState(true)
@@ -73,14 +76,13 @@ export default function DoctorReportsPage() {
     
     const content = `
 ═══════════════════════════════════════════════════════════════
-                    AMAN AI - ДЕНСАУЛЫҚ ЕСЕБІ
-                    ОТЧЁТ О ЗДОРОВЬЕ ПАЦИЕНТА
+                    AMAN AI - ${copy.pageTitle.toUpperCase()}
 ═══════════════════════════════════════════════════════════════
 
-ПАЦИЕНТ: ${selectedReport.patientName || "Анонимный пациент"}
-ДАТА: ${new Date(selectedReport.createdAt).toLocaleString("kk-KZ")}
-ДЛИТЕЛЬНОСТЬ РАЗГОВОРА: ${selectedReport.callDuration ? Math.round(selectedReport.callDuration / 60) + " мин" : "—"}
-УРОВЕНЬ РИСКА: ${selectedReport.riskLevel || "LOW"}
+PATIENT: ${selectedReport.patientName || copy.anonymousPatient}
+DATE: ${new Date(selectedReport.createdAt).toLocaleString(locale === "kk" ? "kk-KZ" : locale === "en" ? "en-US" : "ru-RU")}
+${copy.duration.toUpperCase()}: ${selectedReport.callDuration ? Math.round(selectedReport.callDuration / 60) + " min" : "—"}
+RISK LEVEL: ${selectedReport.riskLevel || "LOW"}
 
 ───────────────────────────────────────────────────────────────
                        ОСНОВНЫЕ ПОКАЗАТЕЛИ
@@ -98,9 +100,9 @@ export default function DoctorReportsPage() {
 ${selectedReport.summary}
 
 ───────────────────────────────────────────────────────────────
-${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВНИМАНИЯ!\n" : ""}${selectedReport.requiresFollowup ? "📞 ТРЕБУЕТСЯ НАБЛЮДЕНИЕ\n" : ""}
+${selectedReport.urgentAttention ? `⚠️ ${copy.urgent.toUpperCase()}!\n` : ""}${selectedReport.requiresFollowup ? `📞 ${copy.followup.toUpperCase()}\n` : ""}
 ───────────────────────────────────────────────────────────────
-Отчёт сгенерирован AI • AMAN AI Platform • amanai.kz
+${copy.footer} • amanai.kz
 ═══════════════════════════════════════════════════════════════
     `.trim()
 
@@ -149,13 +151,13 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
     const sections: SummarySection[] = []
     
     const sectionPatterns = [
-      { pattern: /(?:жалпы жағдай|общее состояние|general condition)[:\s]*/gi, type: "general" as const, title: "Жалпы жағдай / Общее состояние" },
-      { pattern: /(?:ұйқы|сон|sleep)[:\s]*/gi, type: "sleep" as const, title: "Ұйқы / Сон" },
-      { pattern: /(?:көңіл-күй|настроение|mood)[:\s]*/gi, type: "mood" as const, title: "Көңіл-күй / Настроение" },
-      { pattern: /(?:стресс|stress)[:\s]*/gi, type: "stress" as const, title: "Стресс / Уровень стресса" },
-      { pattern: /(?:симптом|symptom|белгі)[:\s]*/gi, type: "symptoms" as const, title: "Симптомдар / Симптомы" },
-      { pattern: /(?:қорытынды|заключение|conclusion|резюме|summary)[:\s]*/gi, type: "conclusion" as const, title: "Қорытынды / Заключение" },
-      { pattern: /(?:ұсыныс|рекоменд|recommendation)[:\s]*/gi, type: "recommendations" as const, title: "Ұсыныстар / Рекомендации" },
+      { pattern: /(?:жалпы жағдай|общее состояние|general condition)[:\s]*/gi, type: "general" as const, title: copy.sectionTitles.general },
+      { pattern: /(?:ұйқы|сон|sleep)[:\s]*/gi, type: "sleep" as const, title: copy.sectionTitles.sleep },
+      { pattern: /(?:көңіл-күй|настроение|mood)[:\s]*/gi, type: "mood" as const, title: copy.sectionTitles.mood },
+      { pattern: /(?:стресс|stress)[:\s]*/gi, type: "stress" as const, title: copy.sectionTitles.stress },
+      { pattern: /(?:симптом|symptom|белгі)[:\s]*/gi, type: "symptoms" as const, title: copy.sectionTitles.symptoms },
+      { pattern: /(?:қорытынды|заключение|conclusion|резюме|summary)[:\s]*/gi, type: "conclusion" as const, title: copy.sectionTitles.conclusion },
+      { pattern: /(?:ұсыныс|рекоменд|recommendation)[:\s]*/gi, type: "recommendations" as const, title: copy.sectionTitles.recommendations },
     ]
     
     const numberedPattern = /(?:^|\n)(?:\d+[\.\)]\s*|[-•]\s*)/g
@@ -181,9 +183,9 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
         
         if (!matched && trimmedItem) {
           if (/рекоменд|ұсын|совет|follow|need|should/i.test(trimmedItem)) {
-            sections.push({ type: "recommendations", title: "Ұсыныстар / Рекомендации", content: trimmedItem })
+            sections.push({ type: "recommendations", title: copy.sectionTitles.recommendations, content: trimmedItem })
           } else {
-            sections.push({ type: "other", title: "Ақпарат / Информация", content: trimmedItem })
+            sections.push({ type: "other", title: copy.sectionTitles.other, content: trimmedItem })
           }
         }
       })
@@ -210,7 +212,7 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
         if (!foundHeader && currentSection) {
           currentSection.content += "\n" + trimmedLine
         } else if (!foundHeader && !currentSection) {
-          currentSection = { type: "conclusion", title: "Қорытынды / Заключение", content: trimmedLine }
+          currentSection = { type: "conclusion", title: copy.sectionTitles.conclusion, content: trimmedLine }
         }
       })
       
@@ -220,7 +222,7 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
     }
     
     if (sections.length === 0 && summary.trim()) {
-      return [{ type: "conclusion", title: "Қорытынды / Резюме", content: summary.trim() }]
+      return [{ type: "conclusion", title: copy.sectionTitles.conclusion, content: summary.trim() }]
     }
     
     const merged: SummarySection[] = []
@@ -279,7 +281,7 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
 
   return (
     <>
-      <DashboardHeader title="Пациент есептері" />
+      <DashboardHeader title={copy.pageTitle} />
       <div className="flex-1 overflow-auto relative pb-20 lg:pb-0">
         <DashboardBackground />
         
@@ -287,15 +289,15 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div>
-              <h2 className="text-2xl font-medium tracking-tight mb-1">AI Голосовые есептер</h2>
+              <h2 className="text-2xl font-medium tracking-tight mb-1">{copy.heading}</h2>
               <p className="text-muted-foreground text-sm">
-                {reports.length} есеп • Дауыстық көмекшімен сөйлесуден жасалған
+                {reports.length} {copy.subtitleSuffix} • {copy.subtitleDescription}
               </p>
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
-                placeholder="Іздеу..." 
+                placeholder={copy.searchPlaceholder}
                 className="pl-10 w-[200px]" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -310,9 +312,9 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
           ) : reports.length === 0 ? (
             <div className="text-center py-20 border rounded-2xl bg-background/60">
               <Mic className="w-16 h-16 mx-auto mb-4 opacity-20" />
-              <p className="text-xl text-muted-foreground">Әзірше есептер жоқ</p>
+              <p className="text-xl text-muted-foreground">{copy.emptyTitle}</p>
               <p className="text-sm text-muted-foreground mt-2">
-                Пациенттер дауыстық көмекшімен сөйлескенде есептер пайда болады
+                {copy.emptyDescription}
               </p>
             </div>
           ) : (
@@ -321,7 +323,7 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
               <div className="lg:col-span-1">
                 <div className="border rounded-2xl bg-background/60 backdrop-blur-sm overflow-hidden">
                   <div className="p-4 border-b">
-                    <span className="text-sm font-medium">{filteredReports.length} есеп</span>
+                    <span className="text-sm font-medium">{filteredReports.length} {copy.listCountSuffix}</span>
                   </div>
                   
                   <div className="max-h-[600px] overflow-y-auto">
@@ -342,15 +344,21 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
                                 <AlertTriangle className="w-4 h-4 text-red-500" />
                               )}
                               <span className={`text-xs px-2 py-0.5 rounded-full border ${getRiskColor(report.riskLevel)}`}>
-                                {report.riskLevel || "LOW"}
+                                {report.riskLevel === "CRITICAL"
+                                  ? copy.riskLabels.critical
+                                  : report.riskLevel === "HIGH"
+                                    ? copy.riskLabels.high
+                                    : report.riskLevel === "MODERATE"
+                                      ? copy.riskLabels.moderate
+                                      : copy.riskLabels.low}
                               </span>
                             </div>
                             <p className="text-sm font-medium">
-                              {report.patientName || "Анонимный"}
+                              {report.patientName || copy.anonymousShort}
                             </p>
                             <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                               <span>
-                                {new Date(report.createdAt).toLocaleDateString("kk-KZ", {
+                                {new Date(report.createdAt).toLocaleDateString(locale === "kk" ? "kk-KZ" : locale === "en" ? "en-US" : "ru-RU", {
                                   day: "numeric",
                                   month: "short"
                                 })}
@@ -379,38 +387,42 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
                         <div>
                           <div className="flex items-center gap-3 mb-2">
                             <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getRiskColor(selectedReport.riskLevel)}`}>
-                              {selectedReport.riskLevel === "LOW" ? "Қалыпты" : 
-                               selectedReport.riskLevel === "MODERATE" ? "Орташа" :
-                               selectedReport.riskLevel === "HIGH" ? "Жоғары" : "Төмен"}
+                              {selectedReport.riskLevel === "LOW"
+                                ? copy.riskLabels.low
+                                : selectedReport.riskLevel === "MODERATE"
+                                  ? copy.riskLabels.moderate
+                                  : selectedReport.riskLevel === "HIGH"
+                                    ? copy.riskLabels.high
+                                    : copy.riskLabels.critical}
                             </span>
                             {selectedReport.urgentAttention && (
                               <span className="flex items-center gap-1 text-xs text-red-500">
                                 <AlertTriangle className="w-3 h-3" />
-                                Шұғыл
+                                {copy.urgent}
                               </span>
                             )}
                             {selectedReport.requiresFollowup && (
                               <span className="text-xs text-amber-500">
-                                Бақылау қажет
+                                {copy.followup}
                               </span>
                             )}
                           </div>
                           <h2 className="text-xl font-bold">
-                            {selectedReport.patientName || "Анонимный пациент"}
+                            {selectedReport.patientName || copy.anonymousPatient}
                           </h2>
                           <p className="text-sm text-muted-foreground mt-1">
-                            {new Date(selectedReport.createdAt).toLocaleDateString("kk-KZ", {
+                            {new Date(selectedReport.createdAt).toLocaleDateString(locale === "kk" ? "kk-KZ" : locale === "en" ? "en-US" : "ru-RU", {
                               weekday: "long",
                               day: "numeric",
                               month: "long",
                               year: "numeric"
-                            })} • Ұзақтығы: {formatDuration(selectedReport.callDuration)}
+                            })} • {copy.duration}: {formatDuration(selectedReport.callDuration)}
                           </p>
                         </div>
                         
                         <Button onClick={downloadReport} className="gap-2">
                           <Download className="w-4 h-4" />
-                          Жүктеу
+                          {copy.download}
                         </Button>
                       </div>
                     </div>
@@ -420,22 +432,22 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
                       <div className="p-4 text-center border-r">
                         <Heart className="w-5 h-5 text-rose-500 mx-auto mb-1" />
                         <p className="text-lg font-bold">{selectedReport.generalWellbeing || "—"}</p>
-                        <p className="text-xs text-muted-foreground">Жағдай</p>
+                        <p className="text-xs text-muted-foreground">{copy.stats.wellbeing}</p>
                       </div>
                       <div className="p-4 text-center border-r">
                         <Moon className="w-5 h-5 text-indigo-500 mx-auto mb-1" />
                         <p className="text-lg font-bold">{selectedReport.sleepQuality || "—"}</p>
-                        <p className="text-xs text-muted-foreground">Ұйқы</p>
+                        <p className="text-xs text-muted-foreground">{copy.stats.sleep}</p>
                       </div>
                       <div className="p-4 text-center border-r">
                         <Brain className="w-5 h-5 text-purple-500 mx-auto mb-1" />
                         <p className="text-lg font-bold">{selectedReport.moodState || "—"}</p>
-                        <p className="text-xs text-muted-foreground">Көңіл-күй</p>
+                        <p className="text-xs text-muted-foreground">{copy.stats.mood}</p>
                       </div>
                       <div className="p-4 text-center">
                         <Activity className="w-5 h-5 text-amber-500 mx-auto mb-1" />
                         <p className="text-lg font-bold">{selectedReport.stressLevel || "—"}</p>
-                        <p className="text-xs text-muted-foreground">Стресс</p>
+                        <p className="text-xs text-muted-foreground">{copy.stats.stress}</p>
                       </div>
                     </div>
 
@@ -468,7 +480,7 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
                             <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
                               <FileText className="w-5 h-5 text-emerald-400" />
                             </div>
-                            <h4 className="font-semibold">Қорытынды / Резюме</h4>
+                            <h4 className="font-semibold">{copy.fallbackSummaryTitle}</h4>
                           </div>
                           <p className="text-sm leading-relaxed whitespace-pre-wrap">
                             {selectedReport.summary}
@@ -480,7 +492,7 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
                     {/* Footer */}
                     <div className="px-6 py-4 border-t bg-muted/10">
                       <p className="text-xs text-muted-foreground text-center">
-                        AI арқылы жасалған есеп • AMAN AI Platform
+                        {copy.footer}
                       </p>
                     </div>
                   </div>
@@ -488,7 +500,7 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
                   <div className="border rounded-2xl bg-background/60 p-12 text-center">
                     <FileText className="w-16 h-16 mx-auto mb-4 opacity-20" />
                     <p className="text-lg text-muted-foreground">
-                      Есепті таңдаңыз
+                      {copy.selectPrompt}
                     </p>
                   </div>
                 )}

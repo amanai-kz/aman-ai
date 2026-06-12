@@ -3,8 +3,8 @@
 import Link from "next/link"
 import { 
   ArrowRight, Scan, Activity, ClipboardList, Dna, Droplets, HeartPulse,
-  Brain, ScanLine, Radiation, BrainCircuit, FlaskConical, TestTube2, 
-  Waves, PersonStanding, Syringe, Dumbbell, Atom, BookOpen,
+  Brain, ScanLine, Radiation, BrainCircuit, FlaskConical, TestTube2,
+  Waves, PersonStanding, Syringe, Dumbbell, Atom, BookOpen, Moon, Eye, Stethoscope,
   LucideIcon 
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -28,6 +28,9 @@ const iconMap: Record<string, LucideIcon> = {
   Dumbbell,
   Atom,
   BookOpen,
+  Moon,
+  Eye,
+  Stethoscope,
 }
 
 interface ServiceCardProps {

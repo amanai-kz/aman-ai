@@ -14,19 +14,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { getDoctorCopy } from "@/lib/doctor-copy"
+import { getAppCopy } from "@/lib/app-copy"
 import { Bell, Search, User, Settings, LogOut, Menu } from "lucide-react"
 
 interface DashboardHeaderProps {
   title?: string
-  titleKey?: "doctorWorklist" | "doctorCaseDetail" | "doctorPatientDetail"
+  titleKey?: "doctorWorklist" | "doctorCaseDetail" | "doctorPatientDetail" | "adminUsers"
 }
 
 export function DashboardHeader({ title, titleKey }: DashboardHeaderProps) {
   const { data: session } = useSession()
   const { locale } = useAppLocale()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const copy = getDoctorCopy(locale)
+  const copy = getAppCopy(locale)
   const settingsHref =
     session?.user?.role === "DOCTOR"
       ? "/doctor/settings"
@@ -40,6 +40,8 @@ export function DashboardHeader({ title, titleKey }: DashboardHeaderProps) {
         ? copy.caseDetail.pageTitle
         : titleKey === "doctorPatientDetail"
           ? copy.patientDetail.pageTitle
+          : titleKey === "adminUsers"
+            ? copy.adminUsers.pageTitle
           : title
 
   return (
@@ -51,6 +53,7 @@ export function DashboardHeader({ title, titleKey }: DashboardHeaderProps) {
           <button
             className="lg:hidden p-2 -ml-2 text-muted-foreground hover:text-foreground"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -71,7 +74,7 @@ export function DashboardHeader({ title, titleKey }: DashboardHeaderProps) {
         {/* Right side */}
         <div className="flex items-center gap-2">
           {/* Search (desktop) */}
-          <Button variant="ghost" size="sm" className="hidden md:flex gap-2 text-muted-foreground">
+          <Button variant="ghost" size="sm" className="hidden md:flex gap-2 text-muted-foreground" aria-label={copy.common.searchPlaceholder}>
             <Search className="w-4 h-4" />
             <span className="text-sm">{copy.common.searchPlaceholder}</span>
             <kbd className="hidden lg:inline-flex h-5 items-center gap-1 rounded border border-border bg-secondary px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
@@ -82,7 +85,7 @@ export function DashboardHeader({ title, titleKey }: DashboardHeaderProps) {
           <LanguageSwitcher />
 
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
+          <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
             <Bell className="w-4 h-4" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-foreground rounded-full" />
           </Button>

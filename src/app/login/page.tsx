@@ -4,13 +4,17 @@ import Link from "next/link"
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { signIn } from "next-auth/react"
+import { useAppLocale } from "@/components/providers/locale-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Logo } from "@/components/logo"
+import { getAppCopy } from "@/lib/app-copy"
 import { ArrowRight, Loader2, Eye, EyeOff } from "lucide-react"
 
 function LoginForm() {
   const router = useRouter()
+  const { locale } = useAppLocale()
+  const copy = getAppCopy(locale).auth.login
   
   const [focused, setFocused] = useState<string | null>(null)
   const [email, setEmail] = useState("")
@@ -36,13 +40,13 @@ function LoginForm() {
       })
 
       if (result?.error) {
-        setError("Неверный email или пароль")
+        setError(copy.invalidCredentials)
       } else {
         router.push("/dashboard")
         router.refresh()
       }
     } catch {
-      setError("Произошла ошибка. Попробуйте снова.")
+      setError(copy.genericError)
     } finally {
       setLoading(false)
     }
@@ -96,7 +100,7 @@ function LoginForm() {
 
         <div className="absolute bottom-12 left-12 right-12">
           <p className="text-background/60 text-sm font-light leading-relaxed max-w-md">
-            Платформа нового поколения для нейродиагностики с использованием искусственного интеллекта
+            {copy.decorativeCaption}
           </p>
         </div>
       </div>
@@ -113,8 +117,8 @@ function LoginForm() {
           <div className="w-full max-w-sm opacity-0 animate-fade-up">
             <div className="space-y-10">
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight mb-3">Вход</h1>
-                <p className="text-muted-foreground">Войдите в свой аккаунт для доступа к платформе</p>
+                <h1 className="text-3xl font-semibold tracking-tight mb-3">{copy.title}</h1>
+                <p className="text-muted-foreground">{copy.subtitle}</p>
               </div>
 
               {error && (
@@ -128,15 +132,17 @@ function LoginForm() {
                   {/* Email field */}
                   <div className="relative">
                     <label
+                      htmlFor="login-email"
                       className={`absolute left-0 transition-all duration-300 pointer-events-none ${
                         focused === "email" || email
                           ? "text-xs -top-6 text-foreground"
                           : "text-sm top-3 text-muted-foreground"
                       }`}
                     >
-                      Email
+                      {copy.emailLabel}
                     </label>
                     <Input
+                      id="login-email"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -151,16 +157,18 @@ function LoginForm() {
                   {/* Password field */}
                   <div className="relative">
                     <label
+                      htmlFor="login-password"
                       className={`absolute left-0 transition-all duration-300 pointer-events-none ${
                         focused === "password" || password
                           ? "text-xs -top-6 text-foreground"
                           : "text-sm top-3 text-muted-foreground"
                       }`}
                     >
-                      Пароль
+                      {copy.passwordLabel}
                     </label>
                     <div className="relative">
                       <Input
+                        id="login-password"
                         type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -174,6 +182,7 @@ function LoginForm() {
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label={showPassword ? copy.passwordToggleHide : copy.passwordToggleShow}
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -186,7 +195,7 @@ function LoginForm() {
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <>
-                      <span>Войти</span>
+                      <span>{copy.submit}</span>
                       <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                     </>
                   )}

@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
 import { Logo } from "@/components/logo"
 import { useAppLocale } from "@/components/providers/locale-provider"
-import { getDoctorCopy } from "@/lib/doctor-copy"
+import { getAppCopy } from "@/lib/app-copy"
+import { getDashboardNavigation } from "@/lib/dashboard-navigation"
 import { cn } from "@/lib/utils"
-import { services } from "@/lib/services"
 import {
   LayoutDashboard,
   History,
@@ -39,6 +39,9 @@ import {
   BookOpen,
   AudioLines,
   Mic,
+  Moon,
+  Eye,
+  Stethoscope,
   User,
   LucideIcon,
 } from "lucide-react"
@@ -64,6 +67,9 @@ const iconMap: Record<string, LucideIcon> = {
   BookOpen,
   AudioLines,
   Mic,
+  Moon,
+  Eye,
+  Stethoscope,
   FileText,
 }
 
@@ -78,39 +84,34 @@ interface DashboardSidebarProps {
 export function DashboardSidebar({ user }: DashboardSidebarProps) {
   const pathname = usePathname()
   const { locale } = useAppLocale()
-  const copy = getDoctorCopy(locale)
-
-  const patientNav = [
-    { name: copy.sidebar.dashboard, href: "/dashboard", icon: LayoutDashboard },
-    ...services.map((s) => ({
-      name: s.title,
-      href: s.href,
-      icon: iconMap[s.iconName] || Scan,
-    })),
-    { name: copy.sidebar.history, href: "/dashboard/history", icon: History },
-  ]
-
-  const doctorNav = [
-    { name: copy.sidebar.dashboard, href: "/doctor/dashboard", icon: LayoutDashboard },
-    { name: copy.sidebar.patients, href: "/doctor/patients", icon: Users },
-    { name: copy.sidebar.worklist, href: "/doctor/worklist", icon: ListOrdered },
-    { name: copy.sidebar.reviews, href: "/doctor/reviews", icon: ClipboardCheck },
-    { name: copy.sidebar.reports, href: "/doctor/reports", icon: FileText },
-  ]
-
-  const adminNav = [
-    { name: copy.sidebar.dashboard, href: "/admin/dashboard", icon: LayoutDashboard },
-    { name: copy.sidebar.users, href: "/admin/users", icon: Users },
-    { name: copy.sidebar.stats, href: "/admin/stats", icon: BarChart3 },
-    { name: copy.sidebar.services, href: "/admin/services", icon: Cog },
-  ]
-
-  const navigation =
-    user.role === "ADMIN"
-      ? adminNav
-      : user.role === "DOCTOR"
-      ? doctorNav
-      : patientNav
+  const copy = getAppCopy(locale)
+  const navConfig = getDashboardNavigation(
+    user.role === "ADMIN" ? "ADMIN" : user.role === "DOCTOR" ? "DOCTOR" : "PATIENT",
+    locale
+  )
+  const navigation = navConfig.primary.map((item) => ({
+    ...item,
+    icon:
+      item.href === "/dashboard" || item.href === "/doctor/dashboard" || item.href === "/admin/dashboard"
+        ? LayoutDashboard
+        : item.href === "/doctor/patients" || item.href === "/admin/users"
+          ? Users
+          : item.href === "/doctor/worklist"
+            ? ListOrdered
+            : item.href === "/doctor/reviews"
+              ? ClipboardCheck
+              : item.href === "/doctor/reports"
+                ? FileText
+                : item.href === "/admin/stats"
+                  ? BarChart3
+                  : item.href === "/admin/services"
+                    ? Cog
+                    : item.href === "/dashboard/history"
+                      ? History
+                      : (item as { iconName?: string }).iconName
+                        ? iconMap[(item as { iconName?: string }).iconName as string] || Scan
+                        : Scan,
+  }))
 
   return (
     <>
@@ -125,7 +126,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
 
         {/* User info - clickable to profile */}
         <Link 
-          href="/dashboard/profile"
+          href={navConfig.profileHref}
           className="block px-6 py-4 border-b border-border hover:bg-secondary/50 transition-colors"
         >
           <p className="font-medium truncate">{user.name || copy.common.profileFallback}</p>
@@ -172,7 +173,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
             <span>{copy.sidebar.profile}</span>
           </Link>
           <Link
-            href={user.role === "DOCTOR" ? "/doctor/settings" : user.role === "ADMIN" ? "/admin/settings" : "/dashboard/settings"}
+            href={navConfig.settingsHref}
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors",
               pathname.includes("/settings")

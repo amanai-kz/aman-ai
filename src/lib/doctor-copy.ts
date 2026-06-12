@@ -217,6 +217,41 @@ type DoctorCopy = {
       safePlaceholder: string
     }
   }
+  reviewsPage: {
+    pageTitle: string
+    pendingHeading: string
+    attentionSummary: string
+    priorityLegend: {
+      high: string
+      medium: string
+      low: string
+    }
+    aiConclusion: string
+    confidence: string
+    details: string
+    comment: string
+    reject: string
+    confirm: string
+    ageSuffix: string
+    allReviewedTitle: string
+    allReviewedDescription: string
+    timeLabels: {
+      twoHoursAgo: string
+      fiveHoursAgo: string
+      yesterday: string
+    }
+    mockCases: {
+      brainMriTitle: string
+      iotMonitoringTitle: string
+      questionnaireTitle: string
+      brainMriResult: string
+      iotResult: string
+      questionnaireResult: string
+      brainMriFindings: [string, string]
+      iotFindings: [string, string]
+      questionnaireFindings: [string, string]
+    }
+  }
 }
 
 const doctorCopy: Record<AppLocale, DoctorCopy> = {
@@ -442,6 +477,41 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
         assignments: "Нужна синхронизация с фактическими назначениями doctor_patient.",
         history: "Сюда можно будет добавить историю анализов и ревью врача.",
         safePlaceholder: "Пока это безопасный placeholder без дополнительных API-вызовов.",
+      },
+    },
+    reviewsPage: {
+      pageTitle: "Проверка анализов",
+      pendingHeading: "Ожидают проверки",
+      attentionSummary: "анализов требуют вашего внимания",
+      priorityLegend: {
+        high: "Высокий",
+        medium: "Средний",
+        low: "Низкий",
+      },
+      aiConclusion: "AI заключение",
+      confidence: "уверенность",
+      details: "Подробнее",
+      comment: "Комментарий",
+      reject: "Отклонить",
+      confirm: "Подтвердить",
+      ageSuffix: "лет",
+      allReviewedTitle: "Все анализы проверены",
+      allReviewedDescription: "Новые анализы появятся здесь автоматически",
+      timeLabels: {
+        twoHoursAgo: "2 часа назад",
+        fiveHoursAgo: "5 часов назад",
+        yesterday: "Вчера",
+      },
+      mockCases: {
+        brainMriTitle: "МРТ головного мозга",
+        iotMonitoringTitle: "IoT мониторинг (30 мин)",
+        questionnaireTitle: "Опросник PSS-10",
+        brainMriResult: "Выявлены признаки начальной стадии атрофии",
+        iotResult: "Повышенный уровень стресса",
+        questionnaireResult: "Умеренный уровень стресса",
+        brainMriFindings: ["Лёгкая атрофия коры", "Расширение желудочков"],
+        iotFindings: ["HRV: 35ms (низкий)", "Стресс: 68%"],
+        questionnaireFindings: ["Балл: 21/40", "Категория: средний"],
       },
     },
   },
@@ -670,6 +740,41 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
         safePlaceholder: "This is currently a safe placeholder without additional API calls.",
       },
     },
+    reviewsPage: {
+      pageTitle: "Case reviews",
+      pendingHeading: "Pending review",
+      attentionSummary: "analyses require your attention",
+      priorityLegend: {
+        high: "High",
+        medium: "Medium",
+        low: "Low",
+      },
+      aiConclusion: "AI conclusion",
+      confidence: "confidence",
+      details: "Details",
+      comment: "Comment",
+      reject: "Reject",
+      confirm: "Confirm",
+      ageSuffix: "years old",
+      allReviewedTitle: "All cases reviewed",
+      allReviewedDescription: "New analyses will appear here automatically",
+      timeLabels: {
+        twoHoursAgo: "2 hours ago",
+        fiveHoursAgo: "5 hours ago",
+        yesterday: "Yesterday",
+      },
+      mockCases: {
+        brainMriTitle: "Brain MRI",
+        iotMonitoringTitle: "IoT monitoring (30 min)",
+        questionnaireTitle: "PSS-10 questionnaire",
+        brainMriResult: "Early-stage atrophy markers were detected",
+        iotResult: "Elevated stress level detected",
+        questionnaireResult: "Moderate stress level detected",
+        brainMriFindings: ["Mild cortical atrophy", "Ventricular enlargement"],
+        iotFindings: ["HRV: 35ms (low)", "Stress: 68%"],
+        questionnaireFindings: ["Score: 21/40", "Category: medium"],
+      },
+    },
   },
   kk: {
     common: {
@@ -894,6 +999,41 @@ const doctorCopy: Record<AppLocale, DoctorCopy> = {
         assignments: "Нақты doctor_patient тағайындауларымен синхрондау әлі қажет.",
         history: "Мұнда кейін талдау тарихын және дәрігердің тексеру жазбаларын қосуға болады.",
         safePlaceholder: "Қазір бұл қосымша API шақыруларынсыз қауіпсіз placeholder болып тұр.",
+      },
+    },
+    reviewsPage: {
+      pageTitle: "Талдауларды тексеру",
+      pendingHeading: "Тексеруді күтуде",
+      attentionSummary: "талдау сіздің назарыңызды қажет етеді",
+      priorityLegend: {
+        high: "Жоғары",
+        medium: "Орташа",
+        low: "Төмен",
+      },
+      aiConclusion: "AI қорытындысы",
+      confidence: "сенімділік",
+      details: "Толығырақ",
+      comment: "Пікір",
+      reject: "Қабылдамау",
+      confirm: "Растау",
+      ageSuffix: "жаста",
+      allReviewedTitle: "Барлық талдаулар тексерілді",
+      allReviewedDescription: "Жаңа талдаулар осы жерде автоматты түрде пайда болады",
+      timeLabels: {
+        twoHoursAgo: "2 сағат бұрын",
+        fiveHoursAgo: "5 сағат бұрын",
+        yesterday: "Кеше",
+      },
+      mockCases: {
+        brainMriTitle: "Мидың МРТ зерттеуі",
+        iotMonitoringTitle: "IoT мониторингі (30 мин)",
+        questionnaireTitle: "PSS-10 сауалнамасы",
+        brainMriResult: "Атрофияның бастапқы белгілері анықталды",
+        iotResult: "Стресс деңгейі жоғарылаған",
+        questionnaireResult: "Стрестің орташа деңгейі анықталды",
+        brainMriFindings: ["Қыртыстың жеңіл атрофиясы", "Қарыншалардың кеңеюі"],
+        iotFindings: ["HRV: 35ms (төмен)", "Стресс: 68%"],
+        questionnaireFindings: ["Ұпай: 21/40", "Санат: орташа"],
       },
     },
   },

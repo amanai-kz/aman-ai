@@ -43,3 +43,20 @@ test("getDoctorCopy includes localized SCRUM-35, SCRUM-32, and SCRUM-36 doctor r
   assert.equal(getDoctorCopy("kk").caseDetail.actionButtons.rejectAiDraft, "AI нобайын қабылдамау")
   assert.equal(getDoctorCopy("en").caseDetail.errorMessages.reportReadOnly, "Signed reports are read-only.")
 })
+
+test("getDoctorCopy includes localized doctor reviews page text for EN, RU, and KK", () => {
+  assert.equal(getDoctorCopy("ru").reviewsPage.pageTitle, "Проверка анализов")
+  assert.equal(getDoctorCopy("en").reviewsPage.pendingHeading, "Pending review")
+  assert.equal(getDoctorCopy("kk").reviewsPage.confirm, "Растау")
+  assert.equal(getDoctorCopy("en").reviewsPage.timeLabels.twoHoursAgo, "2 hours ago")
+  assert.equal(getDoctorCopy("ru").reviewsPage.priorityLegend.medium, "Средний")
+})
+
+test("english doctor reviews copy does not regress to hardcoded Russian", () => {
+  const enCopy = getDoctorCopy("en").reviewsPage
+
+  assert.equal(enCopy.pageTitle, "Case reviews")
+  assert.equal(enCopy.aiConclusion, "AI conclusion")
+  assert.equal(enCopy.allReviewedTitle, "All cases reviewed")
+  assert.ok(!/Проверка|Ожидают|Подробнее|Подтвердить/.test(JSON.stringify(enCopy)))
+})

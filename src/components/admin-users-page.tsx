@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react"
 import { Search, Users } from "lucide-react"
+import { useAppLocale } from "@/components/providers/locale-provider"
+import { getAppCopy } from "@/lib/app-copy"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
@@ -29,6 +31,8 @@ const roleBadgeClassName: Record<AdminUserRow["role"], string> = {
 }
 
 export function AdminUsersPage({ initialUsers }: { initialUsers: AdminUserRow[] }) {
+  const { locale } = useAppLocale()
+  const copy = getAppCopy(locale).adminUsers
   const [query, setQuery] = useState("")
 
   const filteredUsers = useMemo(() => {
@@ -49,10 +53,8 @@ export function AdminUsersPage({ initialUsers }: { initialUsers: AdminUserRow[] 
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-medium tracking-tight">Пользователи</h2>
-          <p className="text-sm text-muted-foreground">
-            Управление аккаунтами пациентов, врачей и администраторов
-          </p>
+          <h2 className="text-2xl font-medium tracking-tight">{copy.heading}</h2>
+          <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
         </div>
 
         <div className="relative w-full sm:max-w-xs">
@@ -60,7 +62,7 @@ export function AdminUsersPage({ initialUsers }: { initialUsers: AdminUserRow[] 
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Поиск по имени, email, роли..."
+            placeholder={copy.searchPlaceholder}
             className="pl-10"
           />
         </div>
@@ -68,19 +70,19 @@ export function AdminUsersPage({ initialUsers }: { initialUsers: AdminUserRow[] 
 
       <div className="grid gap-4 md:grid-cols-3">
         <SummaryCard
-          label="Всего"
+          label={copy.summary.total.label}
           value={initialUsers.length.toString()}
-          description="аккаунтов"
+          description={copy.summary.total.description}
         />
         <SummaryCard
-          label="Врачей"
+          label={copy.summary.doctors.label}
           value={initialUsers.filter((user) => user.role === "DOCTOR").length.toString()}
-          description="в системе"
+          description={copy.summary.doctors.description}
         />
         <SummaryCard
-          label="Админов"
+          label={copy.summary.admins.label}
           value={initialUsers.filter((user) => user.role === "ADMIN").length.toString()}
-          description="с доступом"
+          description={copy.summary.admins.description}
         />
       </div>
 
@@ -89,10 +91,10 @@ export function AdminUsersPage({ initialUsers }: { initialUsers: AdminUserRow[] 
           <Table>
             <TableHeader>
               <TableRow className="bg-secondary/40">
-                <TableHead className="px-4">Пользователь</TableHead>
-                <TableHead className="px-4">Роль</TableHead>
-                <TableHead className="px-4">Детали</TableHead>
-                <TableHead className="px-4">Создан</TableHead>
+                <TableHead className="px-4">{copy.tableHeaders.user}</TableHead>
+                <TableHead className="px-4">{copy.tableHeaders.role}</TableHead>
+                <TableHead className="px-4">{copy.tableHeaders.details}</TableHead>
+                <TableHead className="px-4">{copy.tableHeaders.created}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -100,20 +102,24 @@ export function AdminUsersPage({ initialUsers }: { initialUsers: AdminUserRow[] 
                 <TableRow key={user.id}>
                   <TableCell className="px-4 py-4 align-top">
                     <div className="space-y-1">
-                      <p className="font-medium">{user.name}</p>
+                      <p className="font-medium">{user.name || copy.defaultRows.unnamed}</p>
                       <p className="text-sm text-muted-foreground">{user.email}</p>
                     </div>
                   </TableCell>
                   <TableCell className="px-4 py-4 align-top">
                     <Badge variant="outline" className={roleBadgeClassName[user.role]}>
-                      {user.role}
+                      {copy.roleLabels[user.role]}
                     </Badge>
                   </TableCell>
                   <TableCell className="px-4 py-4 text-sm text-muted-foreground">
-                    {user.details}
+                    {user.details || fallbackDetailsForRole(user.role, copy)}
                   </TableCell>
                   <TableCell className="px-4 py-4 text-sm text-muted-foreground">
-                    {user.createdAt}
+                    {new Intl.DateTimeFormat(locale === "kk" ? "kk-KZ" : locale === "en" ? "en-US" : "ru-RU", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    }).format(new Date(user.createdAt))}
                   </TableCell>
                 </TableRow>
               ))}
@@ -124,15 +130,22 @@ export function AdminUsersPage({ initialUsers }: { initialUsers: AdminUserRow[] 
             <div className="mb-4 rounded-2xl bg-secondary p-4">
               <Users className="h-6 w-6 text-muted-foreground" />
             </div>
-            <p className="font-medium">Пользователи не найдены</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Измените запрос или проверьте данные в базе.
-            </p>
+            <p className="font-medium">{copy.empty.title}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{copy.empty.description}</p>
           </div>
         )}
       </div>
     </div>
   )
+}
+
+function fallbackDetailsForRole(
+  role: AdminUserRow["role"],
+  copy: ReturnType<typeof getAppCopy>["adminUsers"]
+) {
+  if (role === "DOCTOR") return copy.defaultRows.doctorProfileMissing
+  if (role === "PATIENT") return copy.defaultRows.patientProfileMissing
+  return copy.defaultRows.systemAccess
 }
 
 function SummaryCard({

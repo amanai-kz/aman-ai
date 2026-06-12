@@ -32,20 +32,16 @@ async function getUsers(): Promise<AdminUserRow[]> {
 
     return users.map((user) => ({
       id: user.id,
-      name: user.name || "Без имени",
+      name: user.name || "",
       email: user.email,
       role: user.role,
-      createdAt: new Intl.DateTimeFormat("ru-RU", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }).format(user.createdAt),
+      createdAt: user.createdAt.toISOString(),
       details:
         user.role === "DOCTOR"
-          ? user.doctor?.specialization || user.doctor?.hospital || "Профиль врача не заполнен"
+          ? user.doctor?.specialization || user.doctor?.hospital || ""
           : user.role === "PATIENT"
-            ? user.patient?.phone || "Профиль пациента не заполнен"
-            : "Системный доступ",
+            ? user.patient?.phone || ""
+            : "",
     }))
   } catch {
     return []
@@ -62,7 +58,7 @@ export default async function AdminUsersRoute() {
 
   return (
     <>
-      <DashboardHeader title="Пользователи" />
+      <DashboardHeader titleKey="adminUsers" />
       <div className="relative flex-1 overflow-auto pb-20 lg:pb-0">
         <DashboardBackground />
 

@@ -2,10 +2,12 @@
 
 import { useState } from "react"
 import { useSession, signOut } from "next-auth/react"
+import { useAppLocale } from "@/components/providers/locale-provider"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardBackground } from "@/components/dashboard-background"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { getAppCopy } from "@/lib/app-copy"
 import { 
   Bell, 
   Shield, 
@@ -13,10 +15,8 @@ import {
   Globe, 
   Smartphone,
   Mail,
-  Lock,
   Trash2,
   LogOut,
-  ChevronRight,
   Moon,
   Sun,
   Monitor,
@@ -28,19 +28,21 @@ import {
 
 export default function SettingsPage() {
   const { data: session } = useSession()
+  const { locale } = useAppLocale()
   const [activeTab, setActiveTab] = useState("notifications")
+  const copy = getAppCopy(locale).patientSettings
 
   const tabs = [
-    { id: "notifications", label: "Уведомления", icon: Bell },
-    { id: "security", label: "Безопасность", icon: Shield },
-    { id: "appearance", label: "Внешний вид", icon: Palette },
-    { id: "language", label: "Язык", icon: Globe },
-    { id: "devices", label: "Устройства", icon: Smartphone },
+    { id: "notifications", label: copy.tabs.notifications, icon: Bell },
+    { id: "security", label: copy.tabs.security, icon: Shield },
+    { id: "appearance", label: copy.tabs.appearance, icon: Palette },
+    { id: "language", label: copy.tabs.language, icon: Globe },
+    { id: "devices", label: copy.tabs.devices, icon: Smartphone },
   ]
 
   return (
     <>
-      <DashboardHeader title="Настройки" />
+      <DashboardHeader title={copy.pageTitle} />
       <div className="flex-1 overflow-auto relative pb-20 lg:pb-0">
         <DashboardBackground />
         
@@ -67,7 +69,7 @@ export default function SettingsPage() {
 
               {/* Danger Zone */}
               <div className="border border-destructive/20 rounded-2xl p-4 bg-destructive/5 mt-6">
-                <h3 className="font-medium text-sm text-destructive mb-3">Опасная зона</h3>
+                <h3 className="font-medium text-sm text-destructive mb-3">{copy.dangerZone.title}</h3>
                 <Button
                   variant="outline"
                   size="sm"
@@ -75,7 +77,7 @@ export default function SettingsPage() {
                   onClick={() => signOut({ callbackUrl: "/" })}
                 >
                   <LogOut className="w-4 h-4 mr-2" />
-                  Выйти из аккаунта
+                  {copy.dangerZone.signOut}
                 </Button>
               </div>
             </div>
@@ -96,6 +98,8 @@ export default function SettingsPage() {
 }
 
 function NotificationsSettings() {
+  const { locale } = useAppLocale()
+  const copy = getAppCopy(locale).patientSettings.notifications
   const [settings, setSettings] = useState({
     email: true,
     push: false,
@@ -106,15 +110,15 @@ function NotificationsSettings() {
 
   return (
     <div className="border border-border rounded-2xl p-6 bg-background/60 backdrop-blur-sm">
-      <h2 className="text-lg font-medium mb-6">Уведомления</h2>
+      <h2 className="text-lg font-medium mb-6">{copy.title}</h2>
       
       <div className="space-y-6">
         <div className="flex items-center justify-between py-3 border-b border-border">
           <div className="flex items-center gap-3">
             <Mail className="w-5 h-5 text-muted-foreground" />
             <div>
-              <p className="font-medium text-sm">Email уведомления</p>
-              <p className="text-xs text-muted-foreground">Получать уведомления на почту</p>
+              <p className="font-medium text-sm">{copy.email.title}</p>
+              <p className="text-xs text-muted-foreground">{copy.email.description}</p>
             </div>
           </div>
           <Toggle checked={settings.email} onChange={(v) => setSettings({ ...settings, email: v })} />
@@ -124,8 +128,8 @@ function NotificationsSettings() {
           <div className="flex items-center gap-3">
             <Smartphone className="w-5 h-5 text-muted-foreground" />
             <div>
-              <p className="font-medium text-sm">Push уведомления</p>
-              <p className="text-xs text-muted-foreground">Уведомления в браузере</p>
+              <p className="font-medium text-sm">{copy.push.title}</p>
+              <p className="text-xs text-muted-foreground">{copy.push.description}</p>
             </div>
           </div>
           <Toggle checked={settings.push} onChange={(v) => setSettings({ ...settings, push: v })} />
@@ -135,8 +139,8 @@ function NotificationsSettings() {
           <div className="flex items-center gap-3">
             <Check className="w-5 h-5 text-muted-foreground" />
             <div>
-              <p className="font-medium text-sm">Результаты анализов</p>
-              <p className="text-xs text-muted-foreground">Когда готовы результаты AI-анализа</p>
+              <p className="font-medium text-sm">{copy.results.title}</p>
+              <p className="text-xs text-muted-foreground">{copy.results.description}</p>
             </div>
           </div>
           <Toggle checked={settings.results} onChange={(v) => setSettings({ ...settings, results: v })} />
@@ -146,8 +150,8 @@ function NotificationsSettings() {
           <div className="flex items-center gap-3">
             <Bell className="w-5 h-5 text-muted-foreground" />
             <div>
-              <p className="font-medium text-sm">Напоминания</p>
-              <p className="text-xs text-muted-foreground">О предстоящих визитах и обследованиях</p>
+              <p className="font-medium text-sm">{copy.reminders.title}</p>
+              <p className="text-xs text-muted-foreground">{copy.reminders.description}</p>
             </div>
           </div>
           <Toggle checked={settings.reminders} onChange={(v) => setSettings({ ...settings, reminders: v })} />
@@ -158,35 +162,37 @@ function NotificationsSettings() {
 }
 
 function SecuritySettings({ email }: { email: string }) {
+  const { locale } = useAppLocale()
+  const copy = getAppCopy(locale).patientSettings.security
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const loading = false
 
   return (
     <div className="space-y-6">
       <div className="border border-border rounded-2xl p-6 bg-background/60 backdrop-blur-sm">
-        <h2 className="text-lg font-medium mb-6">Безопасность</h2>
+        <h2 className="text-lg font-medium mb-6">{copy.title}</h2>
         
         <div className="space-y-6">
           <div className="flex items-center justify-between py-3 border-b border-border">
             <div>
-              <p className="font-medium text-sm">Email</p>
+              <p className="font-medium text-sm">{copy.email}</p>
               <p className="text-sm text-muted-foreground">{email}</p>
             </div>
-            <Button variant="outline" size="sm">Изменить</Button>
+            <Button variant="outline" size="sm">{copy.change}</Button>
           </div>
 
           <div className="py-3 border-b border-border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-sm">Пароль</p>
+                <p className="font-medium text-sm">{copy.password}</p>
                 <p className="text-sm text-muted-foreground">••••••••••</p>
               </div>
               <Button variant="outline" size="sm" onClick={() => setShowChangePassword(!showChangePassword)}>
-                Изменить
+                {copy.change}
               </Button>
             </div>
 
@@ -195,7 +201,7 @@ function SecuritySettings({ email }: { email: string }) {
                 <div className="relative">
                   <Input
                     type={showCurrent ? "text" : "password"}
-                    placeholder="Текущий пароль"
+                    placeholder={copy.currentPassword}
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     className="pr-10"
@@ -204,6 +210,7 @@ function SecuritySettings({ email }: { email: string }) {
                     type="button"
                     onClick={() => setShowCurrent(!showCurrent)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    aria-label={showCurrent ? copy.hidePassword : copy.showPassword}
                   >
                     {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -211,7 +218,7 @@ function SecuritySettings({ email }: { email: string }) {
                 <div className="relative">
                   <Input
                     type={showNew ? "text" : "password"}
-                    placeholder="Новый пароль"
+                    placeholder={copy.newPassword}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="pr-10"
@@ -220,12 +227,13 @@ function SecuritySettings({ email }: { email: string }) {
                     type="button"
                     onClick={() => setShowNew(!showNew)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    aria-label={showNew ? copy.hidePassword : copy.showPassword}
                   >
                     {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 <Button size="sm" disabled={loading}>
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Сохранить"}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : copy.save}
                 </Button>
               </div>
             )}
@@ -233,22 +241,20 @@ function SecuritySettings({ email }: { email: string }) {
 
           <div className="flex items-center justify-between py-3">
             <div>
-              <p className="font-medium text-sm">Двухфакторная аутентификация</p>
-              <p className="text-sm text-muted-foreground">Дополнительная защита аккаунта</p>
+              <p className="font-medium text-sm">{copy.twoFactorTitle}</p>
+              <p className="text-sm text-muted-foreground">{copy.twoFactorDescription}</p>
             </div>
-            <Button variant="outline" size="sm">Настроить</Button>
+            <Button variant="outline" size="sm">{copy.configure}</Button>
           </div>
         </div>
       </div>
 
       <div className="border border-destructive/20 rounded-2xl p-6 bg-destructive/5">
-        <h3 className="font-medium text-destructive mb-4">Удаление аккаунта</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          После удаления аккаунта все ваши данные будут безвозвратно удалены.
-        </p>
+        <h3 className="font-medium text-destructive mb-4">{copy.deleteTitle}</h3>
+        <p className="text-sm text-muted-foreground mb-4">{copy.deleteDescription}</p>
         <Button variant="outline" size="sm" className="text-destructive border-destructive/30">
           <Trash2 className="w-4 h-4 mr-2" />
-          Удалить аккаунт
+          {copy.deleteAction}
         </Button>
       </div>
     </div>
@@ -256,21 +262,23 @@ function SecuritySettings({ email }: { email: string }) {
 }
 
 function AppearanceSettings() {
+  const { locale } = useAppLocale()
+  const copy = getAppCopy(locale).patientSettings.appearance
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system")
 
   const themes = [
-    { id: "light", label: "Светлая", icon: Sun },
-    { id: "dark", label: "Тёмная", icon: Moon },
-    { id: "system", label: "Системная", icon: Monitor },
+    { id: "light", label: copy.light, icon: Sun },
+    { id: "dark", label: copy.dark, icon: Moon },
+    { id: "system", label: copy.system, icon: Monitor },
   ]
 
   return (
     <div className="border border-border rounded-2xl p-6 bg-background/60 backdrop-blur-sm">
-      <h2 className="text-lg font-medium mb-6">Внешний вид</h2>
+      <h2 className="text-lg font-medium mb-6">{copy.title}</h2>
       
       <div className="space-y-6">
         <div>
-          <p className="font-medium text-sm mb-4">Тема</p>
+          <p className="font-medium text-sm mb-4">{copy.theme}</p>
           <div className="grid grid-cols-3 gap-3">
             {themes.map((t) => (
               <button
@@ -294,7 +302,9 @@ function AppearanceSettings() {
 }
 
 function LanguageSettings() {
-  const [language, setLanguage] = useState("ru")
+  const { locale } = useAppLocale()
+  const { setLocale } = useAppLocale()
+  const copy = getAppCopy(locale).patientSettings.language
 
   const languages = [
     { id: "ru", label: "Русский", flag: "🇷🇺" },
@@ -304,15 +314,15 @@ function LanguageSettings() {
 
   return (
     <div className="border border-border rounded-2xl p-6 bg-background/60 backdrop-blur-sm">
-      <h2 className="text-lg font-medium mb-6">Язык</h2>
+      <h2 className="text-lg font-medium mb-6">{copy.title}</h2>
       
       <div className="space-y-2">
         {languages.map((lang) => (
           <button
             key={lang.id}
-            onClick={() => setLanguage(lang.id)}
+            onClick={() => setLocale(lang.id as "ru" | "en" | "kk")}
             className={`w-full flex items-center justify-between p-4 rounded-xl transition-colors ${
-              language === lang.id
+              locale === lang.id
                 ? "bg-foreground text-background"
                 : "hover:bg-secondary"
             }`}
@@ -321,7 +331,7 @@ function LanguageSettings() {
               <span className="text-xl">{lang.flag}</span>
               <span>{lang.label}</span>
             </div>
-            {language === lang.id && <Check className="w-4 h-4" />}
+            {locale === lang.id && <Check className="w-4 h-4" />}
           </button>
         ))}
       </div>
@@ -330,9 +340,11 @@ function LanguageSettings() {
 }
 
 function DevicesSettings() {
+  const { locale } = useAppLocale()
+  const copy = getAppCopy(locale).patientSettings.devices
   return (
     <div className="border border-border rounded-2xl p-6 bg-background/60 backdrop-blur-sm">
-      <h2 className="text-lg font-medium mb-6">Подключённые устройства</h2>
+      <h2 className="text-lg font-medium mb-6">{copy.title}</h2>
       
       <div className="space-y-4">
         <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50">
@@ -341,16 +353,14 @@ function DevicesSettings() {
               <Monitor className="w-5 h-5" />
             </div>
             <div>
-              <p className="font-medium text-sm">Текущее устройство</p>
-              <p className="text-xs text-muted-foreground">Windows • Chrome • Актуально</p>
+              <p className="font-medium text-sm">{copy.currentDevice}</p>
+              <p className="text-xs text-muted-foreground">{copy.currentDeviceMeta}</p>
             </div>
           </div>
-          <span className="text-xs text-green-600 bg-green-500/10 px-2 py-1 rounded-full">Активно</span>
+          <span className="text-xs text-green-600 bg-green-500/10 px-2 py-1 rounded-full">{copy.active}</span>
         </div>
 
-        <p className="text-sm text-muted-foreground text-center py-4">
-          Нет других подключённых устройств
-        </p>
+        <p className="text-sm text-muted-foreground text-center py-4">{copy.empty}</p>
       </div>
     </div>
   )
@@ -360,6 +370,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   return (
     <button
       onClick={() => onChange(!checked)}
+      aria-label="Toggle setting"
       className={`relative w-11 h-6 rounded-full transition-colors ${
         checked ? "bg-foreground" : "bg-secondary"
       }`}
@@ -372,5 +383,3 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
     </button>
   )
 }
-
-
