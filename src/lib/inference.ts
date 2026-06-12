@@ -2,6 +2,7 @@ import { AnalysisStatus, RiskLevel, ServiceType } from "@prisma/client"
 import { z } from "zod"
 
 import { db } from "@/lib/db"
+import { createInMemoryJobQueue } from "@/lib/job-queue"
 import {
   ok,
   requirePrivilegedActor,
@@ -12,6 +13,9 @@ import {
 } from "@/lib/privileged-api"
 
 type InferenceDb = Pick<typeof db, "analysis">
+type InferenceQueueJob = {
+  analysisId: string
+}
 
 const createInferenceJobSchema = z.object({
   analysisId: z.string().min(1),
@@ -34,6 +38,8 @@ type InferenceJobPayload = {
   status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
   result: MockInferenceResult | null
 }
+
+const inferenceJobQueue = createInMemoryJobQueue()
 
 export async function createInferenceJobResponse(
   prisma: InferenceDb,
@@ -63,26 +69,44 @@ export async function createInferenceJobResponse(
       })
     }
 
-    const result = buildDeterministicInferenceResult(analysis)
-    const job = buildJobPayload(analysis.id, "COMPLETED", result)
-
-    const updated = await prisma.analysis.update({
-      where: { id: analysis.id },
-      data: {
-        status: AnalysisStatus.COMPLETED,
-        result: {
-          ...(isRecord(analysis.result) ? analysis.result : {}),
-          inferenceJob: job,
-        },
-        confidence: result.confidence,
-        findings: result.findings,
-        riskLevel: mapPriorityToRiskLevel(result.priority),
-        completedAt: new Date(result.generatedAt),
-      },
+    const queueJobId = formatInferenceJobId(analysis.id)
+    inferenceJobQueue.enqueue<InferenceQueueJob>({
+      id: queueJobId,
+      type: "inference",
+      payload: { analysisId: analysis.id },
     })
 
+    const completed = await inferenceJobQueue.run<InferenceQueueJob, InferenceJobPayload>(
+      queueJobId,
+      async () => {
+        const result = buildDeterministicInferenceResult(analysis)
+        const job = buildJobPayload(analysis.id, "COMPLETED", result)
+
+        const updated = await prisma.analysis.update({
+          where: { id: analysis.id },
+          data: {
+            status: AnalysisStatus.COMPLETED,
+            result: {
+              ...(isRecord(analysis.result) ? analysis.result : {}),
+              inferenceJob: job,
+            },
+            confidence: result.confidence,
+            findings: result.findings,
+            riskLevel: mapPriorityToRiskLevel(result.priority),
+            completedAt: new Date(result.generatedAt),
+          },
+        })
+
+        return getStoredInferenceJob(updated.result, updated.id) ?? job
+      }
+    )
+
+    if (!completed.result) {
+      throw new PrivilegedApiError("INFERENCE_JOB_FAILED", "Inference job failed", 500)
+    }
+
     return ok({
-      job: getStoredInferenceJob(updated.result, updated.id) ?? job,
+      job: completed.result,
     })
   } catch (error) {
     return toErrorResponse(error)
@@ -106,9 +130,11 @@ export async function getInferenceJobResponse(
       throw new PrivilegedApiError("ANALYSIS_NOT_FOUND", "Analysis not found", 404)
     }
 
+    const queued = inferenceJobQueue.get<InferenceQueueJob, InferenceJobPayload>(id)
     const stored = getStoredInferenceJob(analysis.result, analysis.id)
     const job =
       stored ??
+      (queued ? presentQueuedInferenceJob(queued) : null) ??
       buildJobPayload(
         analysis.id,
         analysis.status === AnalysisStatus.FAILED
@@ -246,6 +272,31 @@ function parseInferenceJobId(id: string) {
 
 function formatInferenceJobId(analysisId: string) {
   return `infer-${analysisId}`
+}
+
+function presentQueuedInferenceJob(job: {
+  id: string
+  payload: { analysisId: string }
+  status: "queued" | "running" | "completed" | "failed"
+  result: InferenceJobPayload | null
+}): InferenceJobPayload {
+  if (job.result) {
+    return job.result
+  }
+
+  return {
+    id: job.id,
+    analysisId: job.payload.analysisId,
+    status:
+      job.status === "failed"
+        ? "FAILED"
+        : job.status === "completed"
+          ? "COMPLETED"
+          : job.status === "running"
+            ? "PROCESSING"
+            : "PENDING",
+    result: null,
+  }
 }
 
 function mapPriorityToRiskLevel(priority: MockInferenceResult["priority"]): RiskLevel {

@@ -71,17 +71,18 @@ curl http://localhost:3000/api/inference/jobs/infer-analysis-1 \
 - Inference requests validate input and enforce auth/role checks.
 - The workflow updates real `Analysis` fields: `status`, `result`, `confidence`, `findings`, `riskLevel`, and `completedAt`.
 - `GET /api/inference/jobs/:id` reads back persisted job state from the analysis record.
+- An in-process queue lifecycle now wraps job execution before persistence.
 
 ## What Is Mocked / Local-Only
 
 - No external model server or GPU runtime is called.
 - The model output is deterministic and generated in-process from analysis metadata.
 - Job identity is synthetic: `infer-<analysisId>`.
-- There is no async queue or worker yet; job creation completes immediately.
+- The queue is in-memory only and job creation still completes immediately.
 
 ## Production Follow-Ups
 
-- Add a real job table and worker state machine for queued/running/retry flows.
+- Replace the in-process queue with a durable broker and worker state machine for queued/running/retry flows.
 - Replace deterministic mock output with model adapter interfaces and provider-specific implementations.
 - Separate model metadata, inference artifacts, and structured findings from `Analysis.result`.
 - Add model-serving auth, timeout handling, and observability around inference execution.
