@@ -56,6 +56,22 @@ export async function requirePrivilegedActor(
   }
 }
 
+export async function requireAdminActor(session: PrivilegedSession) {
+  if (!session?.user?.id) {
+    throw new PrivilegedApiError("UNAUTHENTICATED", "Authentication required", 401)
+  }
+
+  if (session.user.role !== "ADMIN") {
+    throw new PrivilegedApiError("FORBIDDEN", "Forbidden", 403)
+  }
+
+  return {
+    userId: session.user.id,
+    role: "ADMIN" as const,
+    name: session.user.name ?? null,
+  }
+}
+
 export function ok<T>(data: T): PrivilegedApiSuccess<T> {
   return {
     status: 200,
