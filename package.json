@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx tests/run-tests.ts",
-    "db:seed": "npx tsx prisma/seed.ts"
+    "db:seed": "npx tsx prisma/seed.ts",
+    "db:seed:review-test": "npx tsx prisma/seed-review-test.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
