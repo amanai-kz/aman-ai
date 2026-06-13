@@ -1,0 +1,19 @@
+# Aman AI — MRI AI Engine (Epic SCRUM-7)
+# ========================================
+# The registry (SCRUM-27) and evaluation harness (SCRUM-26) run on the base
+# backend deps only (numpy, scikit-learn — already in backend/requirements.txt)
+# plus the stdlib. The model-training packages (SCRUM-21..25) need the heavy
+# deps below; install them only on training/inference hosts.
+
+# --- evaluation / registry extras (light) ---
+# numpy, scikit-learn come from backend/requirements.txt
+# (optional, improves NLG eval): bert-score>=0.3.13
+
+# --- model training (heavy; GPU hosts) ---
+# torch>=2.3
+# monai>=1.4
+# simpleitk>=2.4            # standardisation (orientation/resample/intensity)
+# transformers>=4.44        # report-gen LLM
+# peft>=0.12                # LoRA
+# vllm>=0.6                 # serving
+# mlflow>=2.16              # experiment tracking / registry backend (optional)
