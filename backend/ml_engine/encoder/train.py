@@ -121,6 +121,7 @@ def run_training(
     name: str = "mr-encoder",
     register: bool = False,
     code_commit: str = "",
+    data_dir: str | None = None,
     seed: int = 0,
 ) -> dict[str, Any]:
     torch.manual_seed(seed)
@@ -132,7 +133,13 @@ def run_training(
     multi_gpu = data_parallel and dev.type == "cuda" and torch.cuda.device_count() > 1
     train_model = torch.nn.DataParallel(model) if multi_gpu else model
 
-    ds = SyntheticMRIVolumes(cfg, length=dataset_len, seed=seed)
+    if data_dir:
+        from .data import NiftiVolumeDataset
+        ds = NiftiVolumeDataset(data_dir, img_size=cfg.img_size, in_channels=cfg.in_channels)
+        data_source = f"nifti:{data_dir} ({len(ds)} volumes)"
+    else:
+        ds = SyntheticMRIVolumes(cfg, length=dataset_len, seed=seed)
+        data_source = "synthetic-placeholder"
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True, drop_last=True,
                         num_workers=2 if dev.type == "cuda" else 0)
 
@@ -200,6 +207,7 @@ def run_training(
         "final_loss": last_loss,
         "checkpoint": str(ckpt_path),
         "params_M": round(sum(p.numel() for p in encoder.parameters()) / 1e6, 2),
+        "data": data_source,
     }
 
     if register:
@@ -211,7 +219,7 @@ def run_training(
             artifact_uri=str(ckpt_path.resolve()), code_commit=code_commit,
             config={**asdict(cfg), "objective": "masked_volume_ssl",
                     "steps": step, "final_loss": last_loss,
-                    "data": "synthetic-placeholder"},
+                    "data": data_source},
         )
         summary["registered"] = card.model_id
 
@@ -254,6 +262,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--register", action="store_true",
                     help="version the checkpoint in the model registry")
     ap.add_argument("--commit", default="", dest="code_commit")
+    ap.add_argument("--data-dir", default=None, dest="data_dir",
+                    help="folder of NIfTI volumes (real data); omit for synthetic")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args(argv)
 
@@ -263,7 +273,8 @@ def main(argv: list[str] | None = None) -> int:
         warmup=args.warmup, device=args.device, amp=args.amp,
         data_parallel=args.data_parallel, dataset_len=args.dataset_len,
         out_dir=args.out_dir, version=args.version, name=args.name,
-        register=args.register, code_commit=args.code_commit, seed=args.seed,
+        register=args.register, code_commit=args.code_commit,
+        data_dir=args.data_dir, seed=args.seed,
     )
     return 0
 

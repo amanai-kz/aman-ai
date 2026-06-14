@@ -35,7 +35,10 @@ class StructuredFinding:
 
 @dataclass
 class ReportGenConfig:
-    llm_name: str = "meta-llama/Llama-3.2-3B-Instruct"  # swap per licensing/budget
+    # Default to an ungated, commercially-usable open model (Apache-2.0) so the
+    # report generator trains/serves with no licence gate. Swap to a gated model
+    # (e.g. meta-llama/Llama-3.2-3B-Instruct) once a token + licence are in place.
+    llm_name: str = "Qwen/Qwen2.5-1.5B-Instruct"
     n_visual_tokens: int = 32
     lora_r: int = 16
     lora_alpha: int = 32
@@ -134,10 +137,22 @@ class ReportGenerator(nn.Module):
         return self.llm(inputs_embeds=inputs_embeds, attention_mask=attn,
                         labels=full_labels).loss
 
-    def generate(self, volume: torch.Tensor, prompt: str) -> dict:  # pragma: no cover
+    @torch.no_grad()
+    def generate(self, volume: torch.Tensor, prompt: str = "Findings:") -> dict:
+        """Generate a report: prepend the visual prefix and decode with the LLM."""
         if self.llm is None:
             raise RuntimeError("call attach_llm() before generate()")
-        # Implementation note: prepend visual_prefix() to the embedded prompt,
-        # run constrained decoding against findings_vocab, then parse Findings /
-        # Impression + StructuredFinding[]. Left for the training milestone.
-        raise NotImplementedError("generation wired at the training milestone (needs LLM weights)")
+        dev = next(self.llm.parameters()).device
+        vis = self.visual_prefix(volume.to(dev))
+        enc = self.tokenizer([prompt] * vis.shape[0], return_tensors="pt", padding=True).to(dev)
+        tok_embeds = self.llm.get_input_embeddings()(enc["input_ids"]).to(vis.dtype)
+        inputs_embeds = torch.cat([vis, tok_embeds], dim=1)
+        vis_mask = torch.ones(vis.shape[0], vis.shape[1], dtype=enc["attention_mask"].dtype, device=dev)
+        attn = torch.cat([vis_mask, enc["attention_mask"]], dim=1)
+        out = self.llm.generate(
+            inputs_embeds=inputs_embeds, attention_mask=attn,
+            max_new_tokens=self.cfg.max_new_tokens, do_sample=False,
+            pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+        )
+        text = self.tokenizer.batch_decode(out, skip_special_tokens=True)
+        return {"text": text, "n_visual_tokens": vis.shape[1]}

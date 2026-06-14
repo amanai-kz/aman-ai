@@ -22,10 +22,12 @@ Reference: SRS/ТЗ §7. Tracks Jira epic **SCRUM-7** (stories SCRUM-21..27).
 
 ✅ = runnable + unit-tested. Each stage has a working training loop
 (`<package>/train.py`) that runs on GPU and versions its checkpoint in the
-registry. The loops use **synthetic placeholder data** so they run today; real
-training swaps in FOMO300K / a commercially-cleared partner dataset (and, for
-report-gen, the gated Llama weights) — see data-strategy §6.2 / decision D10.
-Verified on 2× NVIDIA A10.
+registry, plus a FastAPI **serving** layer (`serving/`). Training runs on **real
+brain MRI** (`--data-dir`; `encoder/data.py` fetches the open IXITiny set) or
+on synthetic data when no dir is given. Report-gen defaults to an **ungated**
+Apache-2.0 LLM (Qwen2.5); swap `--llm` to the gated Llama once a token/licence
+is in place. The *production* model still needs a commercially-cleared partner
+dataset (decision D10). Verified on 2× NVIDIA A10.
 
 ## Quick start (registry + eval, no GPU)
 
@@ -50,9 +52,11 @@ python -m ml_engine.cli list
 pip install torch transformers peft monai     # GPU host
 CK=checkpoints
 
-# SCRUM-21 — encoder SSL pretraining (masked-volume), multi-GPU + AMP
+# SCRUM-21 — encoder SSL pretraining (masked-volume), multi-GPU + AMP.
+# On real brain MRI (auto-fetches the open IXITiny set), else synthetic:
+python -c "from ml_engine.encoder.data import fetch_ixi_tiny; fetch_ixi_tiny('data/ixi')"
 python -m ml_engine.encoder.train --amp --data-parallel --register \
-    --name mr-encoder --version 0.1.0-ssl --out $CK
+    --data-dir data/ixi/image --name mr-encoder --version 1.0.0-ixi --out $CK
 
 # SCRUM-22 — contrastive image–text alignment, warm-started from the SSL encoder
 python -m ml_engine.alignment.train --amp --register \
@@ -69,6 +73,21 @@ python -m ml_engine.report_gen.train --register --out $CK \
 
 Each `--register` versions the resulting checkpoint in the model registry, so it
 flows straight into the `eval → promote → sign-off` lifecycle above.
+
+## Serving (`serving/`, §7.5)
+
+A FastAPI inference service exposes the trained models — assistive only, every
+output flagged for radiologist sign-off (decision D2). Mountable standalone or
+as a sub-app of the platform backend (it does not touch auth/DB).
+
+```bash
+pip install fastapi uvicorn python-multipart
+export AMAN_ML_ENCODER_CKPT=$CK/mr-encoder-1.0.0-ixi.pt
+export AMAN_ML_TRIAGE_CKPT=$CK/mr-triage-0.1.1.pt
+uvicorn ml_engine.serving.app:create_default_app --factory --port 8001
+# POST /triage  (NIfTI upload) -> per-finding probs + abstention
+# POST /report  (NIfTI upload) -> draft report   |  GET /models, /healthz
+```
 
 ## Promotion gates (`config/settings.py`, override via `AMAN_ML_*`)
 
