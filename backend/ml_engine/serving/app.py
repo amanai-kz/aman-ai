@@ -14,13 +14,17 @@ from typing import Optional
 from .engine import InferenceEngine
 
 
-def create_app(engine: Optional[InferenceEngine] = None):
-    from fastapi import FastAPI, File, UploadFile, HTTPException
+def build_router(engine: Optional[InferenceEngine] = None):
+    """An APIRouter the platform backend can mount: ``app.include_router(build_router(eng), prefix='/ml')``.
+
+    Carries only the ML endpoints — auth/DB stay with the platform.
+    """
+    from fastapi import APIRouter, File, UploadFile, HTTPException
 
     from ..encoder.data import load_nifti
     from ..registry import ModelRegistry
 
-    app = FastAPI(title="Aman AI — MRI Engine", version="1.0.0")
+    router = APIRouter()
     state = {"engine": engine}
 
     def _engine() -> InferenceEngine:
@@ -29,11 +33,11 @@ def create_app(engine: Optional[InferenceEngine] = None):
                                      "AMAN_ML_TRIAGE_CKPT or attach an engine")
         return state["engine"]
 
-    @app.get("/healthz")
+    @router.get("/healthz")
     def healthz():
         return {"status": "ok", "model_loaded": state["engine"] is not None}
 
-    @app.get("/models")
+    @router.get("/models")
     def models():
         cards = ModelRegistry().list()
         return [{"model": c.model_id, "stage": c.stage,
@@ -47,7 +51,7 @@ def create_app(engine: Optional[InferenceEngine] = None):
             return load_nifti(tmp.name, img_size=engine.encoder.cfg.img_size,
                               in_channels=engine.encoder.cfg.in_channels)
 
-    @app.post("/triage")
+    @router.post("/triage")
     def triage(file: UploadFile = File(...)):
         engine = _engine()
         try:
@@ -59,7 +63,7 @@ def create_app(engine: Optional[InferenceEngine] = None):
                 "abstain": r.abstain, "top_finding": r.top_finding,
                 "disclaimer": "assistive output — requires radiologist sign-off"}
 
-    @app.post("/report")
+    @router.post("/report")
     def report(file: UploadFile = File(...), prompt: str = "Findings:"):
         engine = _engine()
         if engine.report_generator is None:
@@ -68,6 +72,14 @@ def create_app(engine: Optional[InferenceEngine] = None):
         out = engine.report_study(vol, prompt=prompt)
         return {**out, "disclaimer": "draft — requires radiologist sign-off"}
 
+    return router
+
+
+def create_app(engine=None):
+    """Standalone FastAPI app wrapping the ML router."""
+    from fastapi import FastAPI
+    app = FastAPI(title="Aman AI — MRI Engine", version="1.0.0")
+    app.include_router(build_router(engine))
     return app
 
 
