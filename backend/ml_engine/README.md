@@ -10,18 +10,22 @@ Reference: SRS/ТЗ §7. Tracks Jira epic **SCRUM-7** (stories SCRUM-21..27).
 
 | Package        | Ticket   | Status            | Needs |
 |----------------|----------|-------------------|-------|
-| `registry/`    | SCRUM-27 | ✅ implemented    | stdlib + numpy |
-| `evaluation/`  | SCRUM-26 | ✅ implemented    | numpy, scikit-learn |
-| `encoder/`     | SCRUM-21 | 🏗 architecture   | torch |
-| `alignment/`   | SCRUM-22 | 🏗 architecture   | torch |
-| `report_gen/`  | SCRUM-23 | 🏗 architecture   | torch, transformers, peft |
-| `triage_head/` | SCRUM-24 | 🏗 head + calib   | torch |
-| `augmentation/`| SCRUM-25 | ✅ tagging / API  | (model: torch+monai) |
-| `config/`      | —        | settings + gates  | stdlib |
-| `cli/`         | —        | MLOps CLI         | — |
+| `registry/`    | SCRUM-27 | ✅ implemented        | stdlib + numpy |
+| `evaluation/`  | SCRUM-26 | ✅ implemented        | numpy, scikit-learn |
+| `encoder/`     | SCRUM-21 | ✅ model + SSL train  | torch |
+| `alignment/`   | SCRUM-22 | ✅ model + train      | torch |
+| `report_gen/`  | SCRUM-23 | ✅ model + LoRA train | torch, transformers, peft |
+| `triage_head/` | SCRUM-24 | ✅ train + calibrate  | torch |
+| `augmentation/`| SCRUM-25 | ✅ tagging / API      | (model: torch+monai) |
+| `config/`      | —        | settings + gates      | stdlib |
+| `cli/`         | —        | MLOps CLI             | — |
 
-✅ = runnable + unit-tested now (no GPU). 🏗 = real architecture; training wired
-when FOMO300K / cleared partner data + GPUs are available (see data-strategy, §6).
+✅ = runnable + unit-tested. Each stage has a working training loop
+(`<package>/train.py`) that runs on GPU and versions its checkpoint in the
+registry. The loops use **synthetic placeholder data** so they run today; real
+training swaps in FOMO300K / a commercially-cleared partner dataset (and, for
+report-gen, the gated Llama weights) — see data-strategy §6.2 / decision D10.
+Verified on 2× NVIDIA A10.
 
 ## Quick start (registry + eval, no GPU)
 
@@ -39,6 +43,32 @@ python -m ml_engine.cli sign-off --model mr-report-gen:0.1.0 --reviewer dr.x
 python -m ml_engine.cli promote  --model mr-report-gen:0.1.0   # -> production (locked)
 python -m ml_engine.cli list
 ```
+
+## Training the model stages (GPU)
+
+```bash
+pip install torch transformers peft monai     # GPU host
+CK=checkpoints
+
+# SCRUM-21 — encoder SSL pretraining (masked-volume), multi-GPU + AMP
+python -m ml_engine.encoder.train --amp --data-parallel --register \
+    --name mr-encoder --version 0.1.0-ssl --out $CK
+
+# SCRUM-22 — contrastive image–text alignment, warm-started from the SSL encoder
+python -m ml_engine.alignment.train --amp --register \
+    --encoder-ckpt $CK/mr-encoder-0.1.0-ssl.pt --out $CK
+
+# SCRUM-24 — triage head: supervised train + temperature calibration
+python -m ml_engine.triage_head.train --register --out $CK
+
+# SCRUM-23 — report generator LoRA fine-tune (override --llm to the gated Llama
+# once an HF token + accepted licence are in place)
+python -m ml_engine.report_gen.train --register --out $CK \
+    --llm hf-internal-testing/tiny-random-LlamaForCausalLM
+```
+
+Each `--register` versions the resulting checkpoint in the model registry, so it
+flows straight into the `eval → promote → sign-off` lifecycle above.
 
 ## Promotion gates (`config/settings.py`, override via `AMAN_ML_*`)
 

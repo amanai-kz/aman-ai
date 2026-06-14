@@ -92,13 +92,47 @@ class ReportGenerator(nn.Module):
             task_type="CAUSAL_LM",
         )
         self.llm = get_peft_model(base, lora)
-        self.llm_dim = self.llm.config.hidden_size
+        hidden = self.llm.config.hidden_size
+        if hidden != self.llm_dim:
+            # The projector must emit tokens in the *actual* LLM embedding space;
+            # rebuild it once the real hidden size is known (constructor used a
+            # placeholder llm_dim before the weights were loaded).
+            self.llm_dim = hidden
+            self.projector = VisualProjector(
+                self.encoder.embed_dim, self.llm_dim, self.cfg.n_visual_tokens
+            ).to(next(self.projector.parameters()).device)
         return self
 
     def visual_prefix(self, volume: torch.Tensor) -> torch.Tensor:
         """Visual tokens to prepend to the LLM prompt embeddings."""
         patch_tokens = self.encoder(volume)["patch_tokens"]
         return self.projector(patch_tokens)
+
+    def training_step(
+        self,
+        volume: torch.Tensor,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        labels: torch.Tensor,
+    ) -> torch.Tensor:
+        """Causal-LM loss on (volume -> report) pairs.
+
+        Prepends the visual prefix to the embedded prompt and masks the visual
+        positions out of the loss (label ``-100``). Works with any attached
+        ``transformers`` causal LM (LoRA-adapted). Used by ``report_gen.train``.
+        """
+        if self.llm is None:
+            raise RuntimeError("call attach_llm() before training_step()")
+        tok_embeds = self.llm.get_input_embeddings()(input_ids)      # (B, T, D)
+        vis = self.visual_prefix(volume).to(tok_embeds.dtype)        # (B, n_vis, D)
+        b, n_vis = vis.shape[0], vis.shape[1]
+        inputs_embeds = torch.cat([vis, tok_embeds], dim=1)
+        vis_mask = torch.ones(b, n_vis, dtype=attention_mask.dtype, device=attention_mask.device)
+        attn = torch.cat([vis_mask, attention_mask], dim=1)
+        vis_labels = torch.full((b, n_vis), -100, dtype=labels.dtype, device=labels.device)
+        full_labels = torch.cat([vis_labels, labels], dim=1)
+        return self.llm(inputs_embeds=inputs_embeds, attention_mask=attn,
+                        labels=full_labels).loss
 
     def generate(self, volume: torch.Tensor, prompt: str) -> dict:  # pragma: no cover
         if self.llm is None:
