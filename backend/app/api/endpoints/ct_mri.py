@@ -1,17 +1,58 @@
 """
 S1: CT/MRI Analysis Service
 ===========================
-Deep Learning analysis of brain scans for early diagnosis 
+Deep Learning analysis of brain scans for early diagnosis
 of neurodegenerative diseases.
 
 Team: Murat, Adilet
+
+ML inference is wired to the MRI engine (``ml_engine.serving``, Epic SCRUM-7):
+when encoder + triage checkpoints are configured via env it returns real
+calibrated triage; otherwise it falls back to the prior mock so the endpoint
+keeps working in environments without the models. Assistive only — output is
+flagged for radiologist sign-off (decision D2).
 """
 
+import os
+import tempfile
+import time
 from typing import List, Optional
+
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter()
+
+# Lazy singleton — built on first use from AMAN_ML_ENCODER_CKPT / AMAN_ML_TRIAGE_CKPT.
+_ENGINE = None
+_ENGINE_TRIED = False
+
+
+def _get_engine():
+    """Return the ML InferenceEngine, or None if not configured/available."""
+    global _ENGINE, _ENGINE_TRIED
+    if _ENGINE_TRIED:
+        return _ENGINE
+    _ENGINE_TRIED = True
+    enc, tri = os.environ.get("AMAN_ML_ENCODER_CKPT"), os.environ.get("AMAN_ML_TRIAGE_CKPT")
+    if enc and tri:
+        try:
+            from ml_engine.serving import InferenceEngine
+            _ENGINE = InferenceEngine.from_checkpoints(
+                enc, tri, device=os.environ.get("AMAN_ML_DEVICE", "cpu"))
+        except Exception:  # noqa: BLE001 — never let model load break the API
+            _ENGINE = None
+    return _ENGINE
+
+
+def _risk_level(severity: float, abstain: bool) -> str:
+    if abstain:
+        return "review"          # uncertain -> route to manual review (D2)
+    if severity >= 0.70:
+        return "high"
+    if severity >= 0.40:
+        return "medium"
+    return "low"
 
 
 class ScanAnalysisRequest(BaseModel):
@@ -56,9 +97,44 @@ async def analyze_scan(
             status_code=400,
             detail=f"Invalid file type. Allowed: {allowed_types}"
         )
-    
-    # TODO: Implement actual ML model inference
-    # For now, return mock response
+
+    engine = _get_engine()
+    filename = file.filename or ""
+    is_nifti = filename.endswith((".nii", ".nii.gz"))
+
+    # Real ML inference when the engine is configured and we have a 3D volume.
+    if engine is not None and is_nifti:
+        t0 = time.time()
+        try:
+            from ml_engine.encoder.data import load_nifti
+            suffix = ".nii.gz" if filename.endswith(".gz") else ".nii"
+            with tempfile.NamedTemporaryFile(suffix=suffix) as tmp:
+                tmp.write(await file.read())
+                tmp.flush()
+                vol = load_nifti(tmp.name, img_size=engine.encoder.cfg.img_size,
+                                 in_channels=engine.encoder.cfg.in_channels)
+            r = engine.triage_study(vol)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=422, detail=f"inference failed: {exc}")
+        findings = [f"{name.replace('_', ' ')}: {p:.2f}" for name, p in r.per_finding.items()]
+        if r.abstain:
+            recs = ["Model abstained (uncertain) — route to radiologist for manual review."]
+        elif r.severity >= 0.70:
+            recs = [f"Critical finding flagged ({r.top_finding.replace('_', ' ')}) — prioritise review."]
+        else:
+            recs = ["No critical finding flagged — radiologist confirmation still required."]
+        return ScanAnalysisResult(
+            id=f"scan_{int(t0)}",
+            scan_type=scan_type,
+            status="completed",
+            findings=findings + ["Assistive output — requires radiologist sign-off (D2)."],
+            confidence=round(float(r.severity), 3),
+            risk_level=_risk_level(r.severity, r.abstain),
+            recommendations=recs,
+            processing_time_ms=int((time.time() - t0) * 1000),
+        )
+
+    # Fallback: engine not configured, or non-volumetric upload -> prior mock.
     return ScanAnalysisResult(
         id="scan_001",
         scan_type=scan_type,
