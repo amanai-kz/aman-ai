@@ -105,3 +105,6 @@ deploy-bot-v3-commands.txt
 *.bak
 nul
 
+
+# Graphify (codebase knowledge graph) — regenerated locally / via post-commit hook
+graphify-out/

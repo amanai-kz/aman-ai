@@ -1,0 +1,62 @@
+{
+  "samples": [
+    {
+      "study_id": "S001",
+      "report": {
+        "hyp": "acute infarct in the left mca territory with mild mass effect",
+        "ref": "acute infarct in the left mca territory with mild mass effect",
+        "pred_labels": {"acute_infarct": 1, "mass_effect": 1, "intracranial_hemorrhage": 0},
+        "ref_labels":  {"acute_infarct": 1, "mass_effect": 1, "intracranial_hemorrhage": 0},
+        "pred_findings": [
+          {"label": "infarct", "anatomy": "left mca", "presence": "present",
+           "relations": [{"type": "location", "target": "left mca"}]}
+        ],
+        "ref_findings": [
+          {"label": "infarct", "anatomy": "left mca", "presence": "present",
+           "relations": [{"type": "location", "target": "left mca"}]}
+        ]
+      },
+      "triage": {"y_true": 1, "y_score": 0.97, "time_to_flag_s": 110.0},
+      "subgroups": {"scanner": "GE", "field_strength": "3T", "site": "KZ-01", "sex": "F"}
+    },
+    {
+      "study_id": "S002",
+      "report": {
+        "hyp": "no acute intracranial abnormality",
+        "ref": "no acute intracranial abnormality identified",
+        "pred_labels": {"acute_infarct": 0, "mass_effect": 0, "intracranial_hemorrhage": 0},
+        "ref_labels":  {"acute_infarct": 0, "mass_effect": 0, "intracranial_hemorrhage": 0},
+        "pred_findings": [],
+        "ref_findings": []
+      },
+      "triage": {"y_true": 0, "y_score": 0.04, "time_to_flag_s": 95.0},
+      "subgroups": {"scanner": "Siemens", "field_strength": "1.5T", "site": "KZ-02", "sex": "M"}
+    },
+    {
+      "study_id": "S003",
+      "report": {
+        "hyp": "acute intracranial hemorrhage in the right frontal lobe",
+        "ref": "acute hemorrhage in the right frontal lobe",
+        "pred_labels": {"acute_infarct": 0, "mass_effect": 0, "intracranial_hemorrhage": 1},
+        "ref_labels":  {"acute_infarct": 0, "mass_effect": 0, "intracranial_hemorrhage": 1},
+        "pred_findings": [{"label": "hemorrhage", "anatomy": "right frontal", "presence": "present"}],
+        "ref_findings": [{"label": "hemorrhage", "anatomy": "right frontal", "presence": "present"}]
+      },
+      "triage": {"y_true": 1, "y_score": 0.93, "time_to_flag_s": 130.0},
+      "subgroups": {"scanner": "GE", "field_strength": "3T", "site": "KZ-01", "sex": "M"}
+    },
+    {
+      "study_id": "S004",
+      "report": {
+        "hyp": "chronic small vessel ischemic changes",
+        "ref": "chronic small vessel ischemic changes",
+        "pred_labels": {"acute_infarct": 0, "mass_effect": 0, "intracranial_hemorrhage": 0},
+        "ref_labels":  {"acute_infarct": 0, "mass_effect": 0, "intracranial_hemorrhage": 0},
+        "pred_findings": [],
+        "ref_findings": []
+      },
+      "triage": {"y_true": 0, "y_score": 0.12, "time_to_flag_s": 100.0},
+      "subgroups": {"scanner": "Siemens", "field_strength": "3T", "site": "KZ-02", "sex": "F"}
+    }
+  ]
+}
