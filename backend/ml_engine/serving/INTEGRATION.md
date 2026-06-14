@@ -20,54 +20,25 @@ Endpoints: `POST /ml/triage`, `POST /ml/report` (NIfTI upload), `GET /ml/models`
 `GET /ml/healthz`. Or run standalone via the bundled `Dockerfile`
 (`uvicorn ml_engine.serving.app:create_default_app --factory`).
 
-## 2. Persist the outputs (decision D7 entities)
+## 2. Persist the outputs — reuse the platform's existing review schema
 
-The engine returns plain JSON; the platform persists it. Suggested Prisma
-models for the ML-produced entities (drop into the platform schema):
+The platform **already has** the radiologist worklist + review/sign-off
+architecture (Prisma `Analysis` / `AnalysisReview` / `AnalysisReviewAuditLog`,
+`src/app/doctor/worklist`, `ReviewWorkflowStatus`, `ReviewAuditAction`). The
+engine maps straight onto it — **don't add a parallel schema**:
 
-```prisma
-model Report {
-  id          String   @id @default(cuid())
-  studyId     String
-  modelId     String        // e.g. "mr-report-gen:1.0.0-qwen" (registry id)
-  text        String        // draft report (radiologist edits/signs)
-  status      ReportStatus  @default(DRAFT)
-  findings    Finding[]
-  triageFlag  TriageFlag?
-  reviews     ReviewEvent[]
-  createdAt   DateTime @default(now())
-}
+| Engine output (JSON) | Existing platform field |
+|---|---|
+| `report.text` (draft) | `Analysis` result / `AnalysisReview.draftText` |
+| `triage.top_finding` + `severity` | `Analysis.riskLevel` (`RiskLevel`) + finding summary |
+| `triage.abstain == true` | route to manual review (do **not** auto-resolve) |
+| model id e.g. `mr-report-gen:1.0.0-qwen` | store on the analysis/review for traceability |
+| radiologist sign-off | existing `AnalysisReview` → `ReviewWorkflowStatus.SIGNED` (D2) |
+| each step | existing `AnalysisReviewAuditLog` (`ReviewAuditAction`) |
 
-model Finding {
-  id          String  @id @default(cuid())
-  reportId    String
-  report      Report  @relation(fields: [reportId], references: [id])
-  label       String  // e.g. "acute_infarct"
-  probability Float
-  anatomy     String?
-  laterality  String?
-}
-
-model TriageFlag {
-  id          String   @id @default(cuid())
-  reportId    String   @unique
-  report      Report   @relation(fields: [reportId], references: [id])
-  topFinding  String
-  severity    Float
-  abstain     Boolean  // true -> route to manual review, never auto-resolve
-}
-
-model ReviewEvent {
-  id          String   @id @default(cuid())
-  reportId    String
-  report      Report   @relation(fields: [reportId], references: [id])
-  reviewerId  String   // radiologist; required before status -> SIGNED (D2)
-  action      String   // "accept" | "edit" | "reject"
-  at          DateTime @default(now())
-}
-
-enum ReportStatus { DRAFT PENDING_REVIEW SIGNED }
-```
+The mapping (which `Analysis` fields hold the triage flag vs. the narrative, and
+whether to add columns) is the product owner's schema decision — the engine just
+needs the JSON persisted and the sign-off gate enforced.
 
 ## 3. Safety contract (decision D2 — assistive only)
 
