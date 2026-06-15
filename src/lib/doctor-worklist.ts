@@ -13,6 +13,9 @@ export interface DoctorWorklistCase {
   status: string
   aiSummary: string
   updatedAt: string
+  manualReviewRequired?: boolean
+  abstain?: boolean
+  oodReasons?: string[]
   mockSummaryKey?: "criticalMri" | "highIot" | "normalQuestionnaire"
 }
 

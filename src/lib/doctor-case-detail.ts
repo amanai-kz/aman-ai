@@ -9,6 +9,7 @@ import {
   type ReviewAuditAction,
   type ReviewWorkflowStatus,
 } from "@/lib/doctor-case-review"
+import type { OodDetectionResult } from "@/lib/ood-detection"
 import { mapRiskToPriority, type DoctorWorklistPriority } from "@/lib/doctor-worklist"
 
 export type DoctorCaseViewerMode = "radiology" | "unavailable"
@@ -60,6 +61,9 @@ export interface DoctorCaseDetail {
     findings: string[]
     confidenceScore: number
     priority: DoctorWorklistPriority
+    manualReviewRequired: boolean
+    abstain: boolean
+    ood: OodDetectionResult | null
   }
   review: DoctorCaseReviewState
   auditLogs: DoctorCaseAuditLog[]
@@ -86,6 +90,7 @@ type DoctorCaseDetailInput = {
   riskLevel: RiskLevel | null
   findings: string[]
   confidence?: number | null
+  ood?: OodDetectionResult | null
   updatedAt: Date
   review?: {
     findingsDraft?: string | null
@@ -123,10 +128,17 @@ export function buildDoctorCaseDetail(input: DoctorCaseDetailInput): DoctorCaseD
   const priority = mapRiskToPriority(input.riskLevel)
   const viewerMode = isRadiologyStudyType(input.studyType) ? "radiology" : "unavailable"
   const normalizedFindings = input.findings.filter(Boolean)
+  const ood = input.ood ?? null
+  const confidenceSource = ood?.manualReviewRequired ? ood.confidence : input.confidence
   const confidenceScore = Math.max(
     0,
-    Math.min(100, Math.round((input.confidence ?? defaultConfidenceByPriority(priority)) * 100))
+    Math.min(100, Math.round((confidenceSource ?? defaultConfidenceByPriority(priority)) * 100))
   )
+  const aiSummary = ood?.manualReviewRequired
+    ? ood.reasons.length > 0
+      ? `Manual review required: ${ood.reasons.join(", ")}`
+      : "Manual review required"
+    : normalizedFindings.join(", ")
 
   return {
     id: input.id,
@@ -135,7 +147,7 @@ export function buildDoctorCaseDetail(input: DoctorCaseDetailInput): DoctorCaseD
     studyType: input.studyType,
     priority,
     status: input.status,
-    aiSummary: normalizedFindings.join(", "),
+    aiSummary,
     updatedAt: input.updatedAt.toISOString(),
     viewer: {
       mode: viewerMode,
@@ -165,6 +177,9 @@ export function buildDoctorCaseDetail(input: DoctorCaseDetailInput): DoctorCaseD
       findings: normalizedFindings,
       confidenceScore,
       priority,
+      manualReviewRequired: ood?.manualReviewRequired ?? false,
+      abstain: ood?.abstain ?? false,
+      ood,
     },
     review: createReviewState({
       findingsDraft: input.review?.findingsDraft ?? "",
@@ -275,6 +290,23 @@ export function getDoctorCaseAiPresentation(
   detail: DoctorCaseDetail,
   locale: AppLocale
 ): DoctorCaseAiPresentation {
+  if (detail.ai.manualReviewRequired) {
+    const reasons = detail.ai.ood?.reasons ?? []
+    const reasonSummary = reasons.length > 0 ? reasons.join(", ") : "OUTSIDE_TRAINING_DISTRIBUTION"
+
+    return {
+      generatedLabel: "Manual review required",
+      draftFindings: "",
+      draftImpression: "",
+      structuredFindings: [
+        { label: "AI status", value: "Abstained" },
+        { label: "Routing", value: "Manual review required" },
+        { label: "Reasons", value: reasonSummary },
+      ],
+      evidence: [`AI abstained: ${reasonSummary}`],
+    }
+  }
+
   const copy = getDoctorCopy(locale).caseDetail
   const findings =
     detail.ai.findings.length > 0
@@ -327,6 +359,13 @@ export function getDoctorCaseReportDrafts(detail: DoctorCaseDetail, locale: AppL
     return {
       findingsDraft: detail.review.findingsDraft,
       impressionDraft: detail.review.impressionDraft,
+    }
+  }
+
+  if (detail.ai.manualReviewRequired) {
+    return {
+      findingsDraft: "",
+      impressionDraft: "",
     }
   }
 

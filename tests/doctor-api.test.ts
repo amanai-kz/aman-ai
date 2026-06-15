@@ -21,6 +21,7 @@ type TestAnalysis = {
   riskLevel: RiskLevel
   findings: string[]
   confidence: number
+  result?: Record<string, unknown> | null
   updatedAt: Date
   patient: {
     user: {
@@ -92,6 +93,7 @@ function buildAnalysis(overrides: Partial<TestAnalysis> = {}): TestAnalysis {
     riskLevel: RiskLevel.HIGH,
     findings: ["Left frontal lesion", "Midline shift"],
     confidence: 0.91,
+    result: null,
     updatedAt: new Date("2026-06-12T09:00:00.000Z"),
     patient: {
       user: {
@@ -360,6 +362,78 @@ test("doctor findings, report, and audit endpoints return the expected data shap
   const auditData = getSuccessData(audit)
   assert.equal(auditData.caseId, "case-1")
   assert.ok(Array.isArray(auditData.auditLogs))
+})
+
+test("doctor findings response exposes abstention state and does not backfill AI drafts", async () => {
+  const response = await getDoctorCaseFindingsResponse(
+    createDb({
+      analysis: {
+        findFirst: async () =>
+          buildAnalysis({
+            findings: [],
+            confidence: 0.12,
+            result: {
+              oodDetection: {
+                isOod: true,
+                manualReviewRequired: true,
+                abstain: true,
+                reasons: ["UNSUPPORTED_SEQUENCE", "UNKNOWN_SCANNER"],
+                severity: "high",
+                confidence: 0.97,
+                checkedAt: "2026-06-12T10:00:00.000Z",
+              },
+              inferenceJob: {
+                id: "infer-case-1",
+                analysisId: "case-1",
+                status: "COMPLETED",
+                result: {
+                  modelName: "aman-ood-gate",
+                  modelVersion: "0.1.0-test",
+                  confidence: 0.12,
+                  generatedAt: "2026-06-12T10:00:00.000Z",
+                  isAiGenerated: false,
+                  findings: [],
+                  impression: "",
+                  priority: "HIGH",
+                  manualReviewRequired: true,
+                  abstain: true,
+                  summary: "Manual review required",
+                  ood: {
+                    isOod: true,
+                    manualReviewRequired: true,
+                    abstain: true,
+                    reasons: ["UNSUPPORTED_SEQUENCE", "UNKNOWN_SCANNER"],
+                    severity: "high",
+                    confidence: 0.97,
+                    checkedAt: "2026-06-12T10:00:00.000Z",
+                  },
+                },
+              },
+            },
+            review: {
+              ...buildAnalysis().review,
+              findingsDraft: "",
+              impressionDraft: "",
+              workflowStatus: "DRAFT",
+              auditLogs: [],
+            },
+          }),
+      },
+    }),
+    doctorSession,
+    "case-1"
+  )
+
+  assert.equal(response.status, 200)
+  const data = getSuccessData(response)
+  assert.equal(data.ai.manualReviewRequired, true)
+  assert.equal(data.ai.abstain, true)
+  assert.deepEqual(data.ai.findings, [])
+  assert.ok(data.ai.ood)
+  assert.deepEqual(data.reportDrafts, {
+    findingsDraft: "",
+    impressionDraft: "",
+  })
 })
 
 test("doctor case detail returns assigned patient data for a successful doctor request", async () => {

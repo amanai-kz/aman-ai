@@ -4,6 +4,7 @@ import { z } from "zod"
 import { buildDoctorCaseDetail, getDoctorCaseReportDrafts } from "@/lib/doctor-case-detail"
 import { db } from "@/lib/db"
 import { getDoctorCaseReviewErrorPayload } from "@/lib/doctor-case-review-errors"
+import { formatManualReviewSummary, getStoredOodDetection } from "@/lib/ood-detection"
 import {
   acceptAiDraft,
   acknowledgeCriticalFinding,
@@ -50,6 +51,7 @@ type AnalysisRecord = {
   riskLevel: Parameters<typeof mapRiskToPriority>[0]
   findings: string[]
   confidence: number | null
+  result: unknown
   updatedAt: Date
   patient: {
     user: {
@@ -576,6 +578,7 @@ async function getAccessibleAnalysisOrThrow(prisma: DoctorApiDb, actor: DoctorAp
 }
 
 function buildDoctorCaseDetailFromAnalysis(analysis: AnalysisRecord) {
+  const ood = getStoredOodDetection(analysis.result)
   const signedByName = getActorNameFromAuditLogs(
     analysis.review?.auditLogs ?? [],
     analysis.review?.signedById
@@ -594,6 +597,7 @@ function buildDoctorCaseDetailFromAnalysis(analysis: AnalysisRecord) {
     riskLevel: analysis.riskLevel,
     findings: analysis.findings,
     confidence: analysis.confidence,
+    ood,
     updatedAt: analysis.updatedAt,
     review: analysis.review
       ? {
@@ -625,6 +629,7 @@ function buildDoctorCaseDetailFromAnalysis(analysis: AnalysisRecord) {
 }
 
 function mapAnalysisToWorklistCase(analysis: AnalysisRecord): DoctorWorklistCase {
+  const ood = getStoredOodDetection(analysis.result)
   return {
     id: analysis.id,
     patientId: analysis.patientId,
@@ -632,7 +637,15 @@ function mapAnalysisToWorklistCase(analysis: AnalysisRecord): DoctorWorklistCase
     studyType: analysis.serviceType,
     priority: mapRiskToPriority(analysis.riskLevel),
     status: analysis.status,
-    aiSummary: analysis.findings.length > 0 ? analysis.findings.join(", ") : "",
+    aiSummary:
+      ood?.manualReviewRequired
+        ? formatManualReviewSummary(ood)
+        : analysis.findings.length > 0
+          ? analysis.findings.join(", ")
+          : "",
+    manualReviewRequired: ood?.manualReviewRequired ?? false,
+    abstain: ood?.abstain ?? false,
+    oodReasons: ood?.reasons ?? [],
     updatedAt: analysis.updatedAt.toISOString(),
   }
 }
