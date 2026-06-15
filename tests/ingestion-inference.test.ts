@@ -254,6 +254,88 @@ test("inference job creation returns deterministic mock model output", async () 
   assert.equal(data.job.result.isAiGenerated, true)
 })
 
+test("OOD inference abstains and returns manual review metadata", async () => {
+  const response = await createInferenceJobResponse(
+    createDb({
+      analysis: {
+        findUnique: async () =>
+          buildAnalysis({
+            inputData: {
+              ingestion: {
+                source: "dicomweb",
+                sourceStudyId: "study-ood-001",
+                modality: "XR",
+                studyDate: "2026-06-12T09:00:00.000Z",
+              },
+            },
+          }),
+        update: async () =>
+          buildAnalysis({
+            status: AnalysisStatus.COMPLETED,
+            confidence: 0.12,
+            findings: [],
+            riskLevel: "HIGH",
+            completedAt: new Date("2026-06-12T10:00:00.000Z"),
+            result: {
+              inferenceJob: {
+                id: "infer-analysis-1",
+                analysisId: "analysis-1",
+                status: "COMPLETED",
+                result: {
+                  modelName: "aman-ood-gate",
+                  modelVersion: "0.1.0-test",
+                  confidence: 0.12,
+                  generatedAt: "2026-06-12T10:00:00.000Z",
+                  isAiGenerated: false,
+                  findings: [],
+                  impression: "",
+                  priority: "HIGH",
+                  manualReviewRequired: true,
+                  abstain: true,
+                  summary: "Manual review required",
+                  ood: {
+                    isOod: true,
+                    manualReviewRequired: true,
+                    abstain: true,
+                    reasons: ["UNSUPPORTED_MODALITY"],
+                    severity: "high",
+                    confidence: 0.98,
+                    checkedAt: "2026-06-12T10:00:00.000Z",
+                  },
+                },
+              },
+              oodDetection: {
+                isOod: true,
+                manualReviewRequired: true,
+                abstain: true,
+                reasons: ["UNSUPPORTED_MODALITY"],
+                severity: "high",
+                confidence: 0.98,
+                checkedAt: "2026-06-12T10:00:00.000Z",
+              },
+            },
+          }),
+      },
+    }),
+    doctorSession,
+    {
+      analysisId: "analysis-1",
+    }
+  )
+
+  assert.equal(response.status, 200)
+  const data = getSuccessData(response)
+  assert.equal(data.job.status, "COMPLETED")
+  assert.ok(data.job.result)
+  assert.equal(data.job.result.isAiGenerated, false)
+  assert.equal(data.job.result.manualReviewRequired, true)
+  assert.equal(data.job.result.abstain, true)
+  assert.deepEqual(data.job.result.findings, [])
+  assert.equal(data.job.result.impression, "")
+  assert.ok(data.job.result.ood)
+  assert.ok(data.job.result.ood.reasons.includes("UNSUPPORTED_MODALITY"))
+})
+
 test("inference job status returns persisted deterministic result", async () => {
   const completed = buildAnalysis({
     status: AnalysisStatus.COMPLETED,
@@ -297,6 +379,71 @@ test("inference job status returns persisted deterministic result", async () => 
   assert.ok(data.job.result)
   assert.equal(data.job.result.modelName, "aman-mock-generic")
   assert.equal(data.job.result.generatedAt, "2026-06-12T10:00:00.000Z")
+})
+
+test("OOD result appears in inference job status", async () => {
+  const response = await getInferenceJobResponse(
+    createDb({
+      analysis: {
+        findUnique: async () =>
+          buildAnalysis({
+            status: AnalysisStatus.COMPLETED,
+            confidence: 0.12,
+            findings: [],
+            riskLevel: "HIGH",
+            completedAt: new Date("2026-06-12T10:00:00.000Z"),
+            result: {
+              inferenceJob: {
+                id: "infer-analysis-1",
+                analysisId: "analysis-1",
+                status: "COMPLETED",
+                result: {
+                  modelName: "aman-ood-gate",
+                  modelVersion: "0.1.0-test",
+                  confidence: 0.12,
+                  generatedAt: "2026-06-12T10:00:00.000Z",
+                  isAiGenerated: false,
+                  findings: [],
+                  impression: "",
+                  priority: "HIGH",
+                  manualReviewRequired: true,
+                  abstain: true,
+                  summary: "Manual review required",
+                  ood: {
+                    isOod: true,
+                    manualReviewRequired: true,
+                    abstain: true,
+                    reasons: ["MISSING_STUDY_METADATA"],
+                    severity: "high",
+                    confidence: 0.96,
+                    checkedAt: "2026-06-12T10:00:00.000Z",
+                  },
+                },
+              },
+              oodDetection: {
+                isOod: true,
+                manualReviewRequired: true,
+                abstain: true,
+                reasons: ["MISSING_STUDY_METADATA"],
+                severity: "high",
+                confidence: 0.96,
+                checkedAt: "2026-06-12T10:00:00.000Z",
+              },
+            },
+          }),
+      },
+    }),
+    adminSession,
+    "infer-analysis-1"
+  )
+
+  assert.equal(response.status, 200)
+  const data = getSuccessData(response)
+  assert.ok(data.job.result)
+  assert.equal(data.job.result.manualReviewRequired, true)
+  assert.equal(data.job.result.abstain, true)
+  assert.ok(data.job.result.ood)
+  assert.ok(data.job.result.ood.reasons.includes("MISSING_STUDY_METADATA"))
 })
 
 test("inference returns 403 for patient role", async () => {

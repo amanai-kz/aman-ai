@@ -3,6 +3,7 @@ import { z } from "zod"
 
 import { db } from "@/lib/db"
 import { createInMemoryJobQueue } from "@/lib/job-queue"
+import { detectOutOfDistributionStudy, type OodDetectionResult } from "@/lib/ood-detection"
 import {
   ok,
   requirePrivilegedActor,
@@ -26,10 +27,14 @@ type MockInferenceResult = {
   modelVersion: string
   confidence: number
   generatedAt: string
-  isAiGenerated: true
+  isAiGenerated: boolean
   findings: string[]
   impression: string
   priority: "NORMAL" | "HIGH" | "CRITICAL"
+  manualReviewRequired: boolean
+  abstain: boolean
+  summary: string | null
+  ood: OodDetectionResult | null
 }
 
 type InferenceJobPayload = {
@@ -70,6 +75,14 @@ export async function createInferenceJobResponse(
     }
 
     const queueJobId = formatInferenceJobId(analysis.id)
+    const queuedJob = inferenceJobQueue.get<InferenceQueueJob, InferenceJobPayload>(queueJobId)
+
+    if (queuedJob?.status === "completed" && queuedJob.result && !existingJob) {
+      return ok({
+        job: await executeInferenceUpdate(prisma, analysis),
+      })
+    }
+
     inferenceJobQueue.enqueue<InferenceQueueJob>({
       id: queueJobId,
       type: "inference",
@@ -78,27 +91,7 @@ export async function createInferenceJobResponse(
 
     const completed = await inferenceJobQueue.run<InferenceQueueJob, InferenceJobPayload>(
       queueJobId,
-      async () => {
-        const result = buildDeterministicInferenceResult(analysis)
-        const job = buildJobPayload(analysis.id, "COMPLETED", result)
-
-        const updated = await prisma.analysis.update({
-          where: { id: analysis.id },
-          data: {
-            status: AnalysisStatus.COMPLETED,
-            result: {
-              ...(isRecord(analysis.result) ? analysis.result : {}),
-              inferenceJob: job,
-            },
-            confidence: result.confidence,
-            findings: result.findings,
-            riskLevel: mapPriorityToRiskLevel(result.priority),
-            completedAt: new Date(result.generatedAt),
-          },
-        })
-
-        return getStoredInferenceJob(updated.result, updated.id) ?? job
-      }
+      async () => executeInferenceUpdate(prisma, analysis)
     )
 
     if (!completed.result) {
@@ -157,7 +150,7 @@ function buildDeterministicInferenceResult(analysis: {
   id: string
   serviceType: ServiceType
   updatedAt: Date
-}) : MockInferenceResult {
+}): MockInferenceResult {
   const generatedAt = new Date(analysis.updatedAt.getTime() + 60_000).toISOString()
   const seed = `${analysis.serviceType}:${analysis.id}`
   const variant = seed
@@ -174,6 +167,10 @@ function buildDeterministicInferenceResult(analysis: {
       findings: ["Acute left frontal signal abnormality"],
       impression: "Priority neuroradiology review is recommended.",
       priority: "HIGH",
+      manualReviewRequired: false,
+      abstain: false,
+      summary: null,
+      ood: null,
     }
   }
 
@@ -187,6 +184,10 @@ function buildDeterministicInferenceResult(analysis: {
       findings: ["Elevated physiologic stress trend"],
       impression: "Structured follow-up monitoring is recommended.",
       priority: variant === 0 ? "NORMAL" : "HIGH",
+      manualReviewRequired: false,
+      abstain: false,
+      summary: null,
+      ood: null,
     }
   }
 
@@ -209,6 +210,32 @@ function buildDeterministicInferenceResult(analysis: {
           ? "Recommend clinician review in the standard queue."
           : "Recommend expedited clinician review.",
     priority: variant === 2 ? "CRITICAL" : variant === 1 ? "HIGH" : "NORMAL",
+    manualReviewRequired: false,
+    abstain: false,
+    summary: null,
+    ood: null,
+  }
+}
+
+function buildDeterministicAbstentionResult(
+  analysis: {
+    updatedAt: Date
+  },
+  ood: OodDetectionResult
+): MockInferenceResult {
+  return {
+    modelName: "aman-ood-gate",
+    modelVersion: "0.1.0-test",
+    confidence: 0.12,
+    generatedAt: new Date(analysis.updatedAt.getTime() + 60_000).toISOString(),
+    isAiGenerated: false,
+    findings: [],
+    impression: "",
+    priority: "HIGH",
+    manualReviewRequired: true,
+    abstain: true,
+    summary: "Manual review required",
+    ood,
   }
 }
 
@@ -232,7 +259,9 @@ function getStoredInferenceJob(result: unknown, fallbackAnalysisId: string): Inf
 
   const job = result.inferenceJob
   const resultValue = isMockInferenceResult(job.result)
-    ? job.result
+    ? normalizeStoredInferenceResult(job.result)
+    : isLegacyMockInferenceResult(job.result)
+      ? normalizeLegacyInferenceResult(job.result)
     : isFlatInferenceJobResult(job)
       ? {
           modelName: job.modelName,
@@ -243,6 +272,10 @@ function getStoredInferenceJob(result: unknown, fallbackAnalysisId: string): Inf
           findings: job.findings,
           impression: job.impression,
           priority: job.priority,
+          manualReviewRequired: false,
+          abstain: false,
+          summary: null,
+          ood: null,
         }
       : null
 
@@ -323,8 +356,30 @@ function isMockInferenceResult(value: unknown): value is MockInferenceResult {
     typeof value.modelVersion === "string" &&
     typeof value.confidence === "number" &&
     typeof value.generatedAt === "string" &&
+    typeof value.isAiGenerated === "boolean" &&
+    Array.isArray(value.findings) &&
+    value.findings.every((item) => typeof item === "string") &&
+    typeof value.impression === "string" &&
+    (value.priority === "NORMAL" || value.priority === "HIGH" || value.priority === "CRITICAL") &&
+    typeof value.manualReviewRequired === "boolean" &&
+    typeof value.abstain === "boolean" &&
+    (value.summary === null || typeof value.summary === "string") &&
+    (value.ood === null || isStoredOodDetection(value.ood))
+  )
+}
+
+function isLegacyMockInferenceResult(
+  value: unknown
+): value is Omit<MockInferenceResult, "manualReviewRequired" | "abstain" | "summary" | "ood"> {
+  return (
+    isRecord(value) &&
+    typeof value.modelName === "string" &&
+    typeof value.modelVersion === "string" &&
+    typeof value.confidence === "number" &&
+    typeof value.generatedAt === "string" &&
     value.isAiGenerated === true &&
     Array.isArray(value.findings) &&
+    value.findings.every((item) => typeof item === "string") &&
     typeof value.impression === "string" &&
     (value.priority === "NORMAL" || value.priority === "HIGH" || value.priority === "CRITICAL")
   )
@@ -341,4 +396,75 @@ function isFlatInferenceJobResult(value: Record<string, unknown>): value is Reco
     typeof value.impression === "string" &&
     (value.priority === "NORMAL" || value.priority === "HIGH" || value.priority === "CRITICAL")
   )
+}
+
+function isStoredOodDetection(value: unknown): value is OodDetectionResult {
+  return (
+    isRecord(value) &&
+    typeof value.isOod === "boolean" &&
+    typeof value.manualReviewRequired === "boolean" &&
+    typeof value.abstain === "boolean" &&
+    Array.isArray(value.reasons) &&
+    value.reasons.every((item) => typeof item === "string") &&
+    (value.severity === "low" || value.severity === "medium" || value.severity === "high") &&
+    typeof value.confidence === "number" &&
+    typeof value.checkedAt === "string"
+  )
+}
+
+async function executeInferenceUpdate(
+  prisma: InferenceDb,
+  analysis: Awaited<ReturnType<InferenceDb["analysis"]["findUnique"]>> & {
+    id: string
+    serviceType: ServiceType
+    updatedAt: Date
+    inputData: unknown
+    result: unknown
+    confidence: number | null
+  }
+) {
+  const ood = detectOutOfDistributionStudy({
+    serviceType: analysis.serviceType,
+    inputData: analysis.inputData,
+    confidence: analysis.confidence,
+    checkedAt: new Date(analysis.updatedAt.getTime() + 60_000),
+  })
+  const result = ood.isOod
+    ? buildDeterministicAbstentionResult(analysis, ood)
+    : buildDeterministicInferenceResult(analysis)
+  const job = buildJobPayload(analysis.id, "COMPLETED", result)
+
+  const updated = await prisma.analysis.update({
+    where: { id: analysis.id },
+    data: {
+      status: AnalysisStatus.COMPLETED,
+      result: {
+        ...(isRecord(analysis.result) ? analysis.result : {}),
+        inferenceJob: job,
+        oodDetection: ood,
+      },
+      confidence: result.confidence,
+      findings: result.findings,
+      riskLevel: result.manualReviewRequired ? RiskLevel.HIGH : mapPriorityToRiskLevel(result.priority),
+      completedAt: new Date(result.generatedAt),
+    },
+  })
+
+  return getStoredInferenceJob(updated.result, updated.id) ?? job
+}
+
+function normalizeStoredInferenceResult(value: MockInferenceResult): MockInferenceResult {
+  return value
+}
+
+function normalizeLegacyInferenceResult(
+  value: Omit<MockInferenceResult, "manualReviewRequired" | "abstain" | "summary" | "ood">
+): MockInferenceResult {
+  return {
+    ...value,
+    manualReviewRequired: false,
+    abstain: false,
+    summary: null,
+    ood: null,
+  }
 }
