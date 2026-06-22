@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { assertNullablePatientAccess } from "@/lib/authz"
+import { PrivilegedApiError, toErrorResponse } from "@/lib/privileged-api"
 import { Pool } from "pg"
 
 const pool = new Pool({
@@ -13,7 +15,7 @@ export async function POST(
 ) {
   try {
     const session = await auth()
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -27,9 +29,10 @@ export async function POST(
       return NextResponse.json({ error: "Rating must be between 1 and 5" }, { status: 400 })
     }
 
-    // Check if report exists
+    // Check the report exists and that the caller owns / is assigned to it
+    // (otherwise any authenticated user could rate any patient's report).
     const existingReport = await pool.query(
-      `SELECT id FROM consultation_reports WHERE id = $1`,
+      `SELECT patient_id as "patientId" FROM consultation_reports WHERE id = $1`,
       [id]
     )
 
@@ -37,19 +40,21 @@ export async function POST(
       return NextResponse.json({ error: "Report not found" }, { status: 404 })
     }
 
+    await assertNullablePatientAccess(session, existingReport.rows[0].patientId)
+
     // Update the report with feedback
     const result = await pool.query(
-      `UPDATE consultation_reports 
-       SET 
+      `UPDATE consultation_reports
+       SET
          rating = $1,
          feedback_text = $2,
          feedback_categories = $3,
          feedback_submitted_at = NOW()
        WHERE id = $4
-       RETURNING 
-         id, 
-         rating, 
-         feedback_text as "feedbackText", 
+       RETURNING
+         id,
+         rating,
+         feedback_text as "feedbackText",
          feedback_categories as "feedbackCategories",
          feedback_submitted_at as "feedbackSubmittedAt"`,
       [
@@ -60,12 +65,16 @@ export async function POST(
       ]
     )
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       feedback: result.rows[0]
     })
 
   } catch (error) {
+    if (error instanceof PrivilegedApiError) {
+      const { status, body } = toErrorResponse(error)
+      return NextResponse.json(body, { status })
+    }
     console.error("Error submitting consultation feedback:", error)
     return NextResponse.json({ error: "Failed to submit feedback" }, { status: 500 })
   }
@@ -78,7 +87,7 @@ export async function GET(
 ) {
   try {
     const session = await auth()
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -86,12 +95,13 @@ export async function GET(
     const { id } = await params
 
     const result = await pool.query(
-      `SELECT 
-        rating, 
-        feedback_text as "feedbackText", 
+      `SELECT
+        patient_id as "patientId",
+        rating,
+        feedback_text as "feedbackText",
         feedback_categories as "feedbackCategories",
         feedback_submitted_at as "feedbackSubmittedAt"
-       FROM consultation_reports 
+       FROM consultation_reports
        WHERE id = $1`,
       [id]
     )
@@ -100,17 +110,21 @@ export async function GET(
       return NextResponse.json({ error: "Report not found" }, { status: 404 })
     }
 
+    await assertNullablePatientAccess(session, result.rows[0].patientId)
+
     const feedback = result.rows[0]
-    
-    return NextResponse.json({ 
+
+    return NextResponse.json({
       hasFeedback: !!feedback.feedbackSubmittedAt,
       feedback: feedback.feedbackSubmittedAt ? feedback : null
     })
 
   } catch (error) {
+    if (error instanceof PrivilegedApiError) {
+      const { status, body } = toErrorResponse(error)
+      return NextResponse.json(body, { status })
+    }
     console.error("Error fetching consultation feedback:", error)
     return NextResponse.json({ error: "Failed to fetch feedback" }, { status: 500 })
   }
 }
-
-
