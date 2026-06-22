@@ -1,3 +1,4 @@
+import "./authz.test"
 import "./session-context.test"
 import "./duration.test"
 import "./worklist.test"

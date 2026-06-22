@@ -1,5 +1,7 @@
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { assertNullablePatientAccess } from "@/lib/authz"
+import { PrivilegedApiError, toErrorResponse } from "@/lib/privileged-api"
 import { NextRequest, NextResponse } from "next/server"
 
 // Twilio client
@@ -53,10 +55,12 @@ export async function POST(request: NextRequest) {
 
     // Get report data
     let reportData: { title: string; summary: string; date: string } | null = null
+    let reportPatientId: string | null = null
 
     if (reportType === "consultation") {
-      const report = await (db as any).consultationReport.findUnique({ where: { id: reportId } })
+      const report = await db.consultationReport.findUnique({ where: { id: reportId } })
       if (report) {
+        reportPatientId = report.patientId ?? null
         reportData = {
           title: report.title,
           summary: report.conclusion || report.generalCondition || "Консультация",
@@ -64,8 +68,9 @@ export async function POST(request: NextRequest) {
         }
       }
     } else {
-      const report = await (db as any).voiceReport.findUnique({ where: { id: reportId } })
+      const report = await db.voiceReport.findUnique({ where: { id: reportId } })
       if (report) {
+        reportPatientId = report.patientId ?? null
         reportData = {
           title: report.title,
           summary: report.summary,
@@ -77,6 +82,11 @@ export async function POST(request: NextRequest) {
     if (!reportData) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 })
     }
+
+    // Authorize before sending: only ADMIN, the owning PATIENT, or an assigned
+    // DOCTOR may share this report — otherwise a user could exfiltrate any
+    // patient's report summary by passing an arbitrary reportId.
+    await assertNullablePatientAccess(session, reportPatientId)
 
     // Send via WhatsApp
     if (type === "whatsapp") {
@@ -198,6 +208,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid type" }, { status: 400 })
 
   } catch (error) {
+    if (error instanceof PrivilegedApiError) {
+      const { status, body } = toErrorResponse(error)
+      return NextResponse.json(body, { status })
+    }
     console.error("Error sending report:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
