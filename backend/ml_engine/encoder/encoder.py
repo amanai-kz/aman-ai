@@ -77,8 +77,16 @@ class MRIEncoder3D(nn.Module):
     def embed_dim(self) -> int:
         return self.cfg.embed_dim
 
-    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+    def forward(self, x: torch.Tensor, *, token_mask: torch.Tensor | None = None,
+                mask_token: torch.Tensor | None = None) -> dict[str, torch.Tensor]:
         tokens = self.patch_embed(x)
+        if token_mask is not None and mask_token is not None:
+            # SimMIM-style input masking: replace masked patch embeddings with a
+            # shared learnable mask token *before* encoding, so the encoder must
+            # infer masked content from visible context (a real SSL signal,
+            # unlike autoencoding the full volume). token_mask: (B, N), 1=masked.
+            w = token_mask.unsqueeze(-1).to(tokens.dtype)
+            tokens = tokens * (1.0 - w) + mask_token.to(tokens.dtype) * w
         cls = self.cls_token.expand(tokens.size(0), -1, -1)
         tokens = torch.cat([cls, tokens], dim=1) + self.pos_embed[:, : tokens.size(1) + 1]
         tokens = self.norm(self.blocks(tokens))
@@ -97,13 +105,23 @@ class MRIEncoder3D(nn.Module):
 
 
 class MaskedVolumeSSL(nn.Module):
-    """MAE-style masked-volume reconstruction head for SSL pretraining (Stage A)."""
+    """SimMIM-style masked-volume reconstruction head for SSL pretraining (Stage A).
+
+    Masked patches are replaced at the *input* with a learnable mask token, so the
+    encoder reconstructs them from visible context; the loss is applied on the
+    masked patches only, against per-patch-normalised targets (the standard
+    MAE/SimMIM recipe). This is a genuine self-supervised objective — earlier code
+    autoencoded the full volume and masked *after* the forward pass, which leaked
+    the answer and produced no transferable signal.
+    """
 
     def __init__(self, encoder: MRIEncoder3D):
         super().__init__()
         self.encoder = encoder
         cfg = encoder.cfg
         patch_voxels = cfg.patch_size[0] * cfg.patch_size[1] * cfg.patch_size[2] * cfg.in_channels
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, cfg.embed_dim))
+        nn.init.trunc_normal_(self.mask_token, std=0.02)
         self.decoder = nn.Sequential(
             nn.Linear(cfg.embed_dim, cfg.embed_dim), nn.GELU(),
             nn.Linear(cfg.embed_dim, patch_voxels),
@@ -117,13 +135,22 @@ class MaskedVolumeSSL(nn.Module):
         mask.scatter_(1, ids[:, :keep], 0)  # 0 = visible, 1 = masked
         return mask
 
+    @staticmethod
+    def _normalize_patches(target: torch.Tensor) -> torch.Tensor:
+        """Per-patch z-score of reconstruction targets (improves MAE/SimMIM features)."""
+        mu = target.mean(dim=-1, keepdim=True)
+        var = target.var(dim=-1, keepdim=True, unbiased=False)
+        return (target - mu) / (var + 1e-6).sqrt()
+
     def forward(self, x: torch.Tensor, target_patches: torch.Tensor) -> torch.Tensor:
-        """Return reconstruction loss on masked patches.
+        """Return reconstruction loss on the masked patches only.
 
         ``target_patches``: (B, N, patch_voxels) ground-truth patch pixels.
+        The same mask drives both input corruption and the loss support.
         """
-        out = self.encoder(x)
+        mask = self.random_mask(self.encoder.cfg.num_patches, x.size(0), x.device)
+        out = self.encoder(x, token_mask=mask, mask_token=self.mask_token)
         pred = self.decoder(out["patch_tokens"])
-        mask = self.random_mask(pred.size(1), pred.size(0), pred.device)
-        loss = ((pred - target_patches) ** 2).mean(dim=-1)
-        return (loss * mask).sum() / mask.sum().clamp(min=1)
+        target = self._normalize_patches(target_patches)
+        loss = ((pred - target) ** 2).mean(dim=-1)             # (B, N)
+        return (loss * mask).sum() / mask.sum().clamp(min=1)    # masked patches only

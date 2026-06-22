@@ -36,6 +36,26 @@ def test_masked_ssl_loss_is_scalar():
     assert loss.ndim == 0 and torch.isfinite(loss)
 
 
+def test_masked_ssl_uses_input_masking_and_trains_mask_token():
+    """SimMIM fix: masking affects the forward pass and the mask token learns."""
+    cfg = _tiny_cfg()
+    enc = MRIEncoder3D(cfg)
+    x = torch.randn(2, 1, *cfg.img_size)
+    mask = torch.ones(2, cfg.num_patches)            # mask everything
+    mtok = torch.randn(1, 1, cfg.embed_dim)
+    plain = enc(x)["pooled"]
+    masked = enc(x, token_mask=mask, mask_token=mtok)["pooled"]
+    assert not torch.allclose(plain, masked)         # input masking is actually applied
+
+    ssl = MaskedVolumeSSL(MRIEncoder3D(cfg))
+    pv = cfg.patch_size[0] * cfg.patch_size[1] * cfg.patch_size[2] * cfg.in_channels
+    target = torch.randn(2, cfg.num_patches, pv)
+    loss = ssl(x, target)
+    loss.backward()
+    assert ssl.mask_token.grad is not None           # mask token is in the graph
+    assert ssl.mask_token.grad.abs().sum() > 0       # ...and receives real signal
+
+
 def test_mrclip_loss_and_zeroshot():
     cfg = _tiny_cfg()
     clip = MRCLIP(MRIEncoder3D(cfg), MRCLIPConfig(proj_dim=16, text_dim=24))
