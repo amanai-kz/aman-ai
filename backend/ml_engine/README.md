@@ -58,6 +58,12 @@ python -c "from ml_engine.encoder.data import fetch_ixi_tiny; fetch_ixi_tiny('da
 python -m ml_engine.encoder.train --amp --data-parallel --register \
     --data-dir data/ixi/image --name mr-encoder --version 1.0.0-ixi --out $CK
 
+# SCRUM-21 acceptance #3 — linear-probe: does the SSL encoder beat from-scratch?
+# Freezes the encoder, probes a labelled held-out task (path,label CSV); records
+# the verdict as a stage="linear-probe" registry card. Omit --ckpt for a CPU demo.
+python -m ml_engine.encoder.linear_probe --register \
+    --ckpt $CK/mr-encoder-1.0.0-ixi.pt --data-dir data/ixi/image --labels data/ixi/labels.csv
+
 # SCRUM-22 — contrastive image–text alignment, warm-started from the SSL encoder
 python -m ml_engine.alignment.train --amp --register \
     --encoder-ckpt $CK/mr-encoder-0.1.0-ssl.pt --out $CK
