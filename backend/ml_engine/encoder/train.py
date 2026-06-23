@@ -21,7 +21,8 @@ training run):
     rather than dropping masked tokens from the encoder input. Good enough to
     exercise the pipeline; tighten to true input-masking before real runs.
   * Linear-probe-beats-from-scratch (the 3rd acceptance criterion) is a
-    downstream eval, not part of this loop — tracked as a follow-up.
+    downstream eval, not part of this loop — implemented separately in
+    :mod:`ml_engine.encoder.linear_probe`.
 """
 from __future__ import annotations
 
@@ -122,6 +123,7 @@ def run_training(
     register: bool = False,
     code_commit: str = "",
     data_dir: str | None = None,
+    dataset: Dataset | None = None,
     seed: int = 0,
 ) -> dict[str, Any]:
     torch.manual_seed(seed)
@@ -133,7 +135,12 @@ def run_training(
     multi_gpu = data_parallel and dev.type == "cuda" and torch.cuda.device_count() > 1
     train_model = torch.nn.DataParallel(model) if multi_gpu else model
 
-    if data_dir:
+    if dataset is not None:
+        # Caller-supplied volume dataset (e.g. the linear-probe demonstration
+        # SSL-pretrains on its own labelled volumes; labels are ignored here).
+        ds = dataset
+        data_source = getattr(dataset, "data_source", f"custom:{type(dataset).__name__}")
+    elif data_dir:
         from .data import NiftiVolumeDataset
         ds = NiftiVolumeDataset(data_dir, img_size=cfg.img_size, in_channels=cfg.in_channels)
         data_source = f"nifti:{data_dir} ({len(ds)} volumes)"
@@ -161,6 +168,8 @@ def run_training(
         except StopIteration:
             data_iter = iter(loader)
             vol = next(data_iter)
+        if isinstance(vol, (list, tuple)):     # labelled dataset -> (volume, label)
+            vol = vol[0]
         vol = vol.to(dev, non_blocking=True)
         target = patchify(vol, cfg.patch_size).to(dev, non_blocking=True)
 
