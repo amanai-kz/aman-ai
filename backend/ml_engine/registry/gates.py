@@ -52,6 +52,10 @@ def check_gates(report: EvalReport, gate_cfg: EvalGates | None = None) -> GateRe
     # Triage detection — safety critical.
     require_min("triage.sensitivity", g.triage_sensitivity_min, "triage_sensitivity")
     require_min("triage.auroc", g.triage_auroc_min, "triage_auroc")
+    # Regulator-grade: optionally gate on the sensitivity lower confidence bound.
+    if getattr(g, "triage_sensitivity_ci_lower_min", 0.0) > 0:
+        require_min("triage.sensitivity_ci_low", g.triage_sensitivity_ci_lower_min,
+                    "triage_sensitivity_ci_low")
     # Report clinical efficacy.
     require_min("report.radgraph_f1", g.radgraph_f1_min, "radgraph_f1")
     require_min("report.chexbert_f1", g.chexbert_f1_min, "chexbert_f1")

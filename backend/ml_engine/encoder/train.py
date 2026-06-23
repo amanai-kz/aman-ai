@@ -16,10 +16,10 @@ training run):
     cleared partner dataset (blocked — see vault data-strategy §6.2 / decision
     D10). Swap :class:`SyntheticMRIVolumes` for the real loader; nothing else
     in the loop changes.
-  * The current ``MaskedVolumeSSL`` encodes the *full* volume and applies the
-    reconstruction loss only on the masked patch subset (masked-target MAE),
-    rather than dropping masked tokens from the encoder input. Good enough to
-    exercise the pipeline; tighten to true input-masking before real runs.
+  * ``MaskedVolumeSSL`` now uses SimMIM-style input masking: masked patches are
+    replaced with a learnable mask token before encoding and the loss is computed
+    on the masked patches only against per-patch-normalised targets — a genuine
+    self-supervised signal (not full-volume autoencoding).
   * Linear-probe-beats-from-scratch (the 3rd acceptance criterion) is a
     downstream eval, not part of this loop — implemented separately in
     :mod:`ml_engine.encoder.linear_probe`.

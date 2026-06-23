@@ -38,6 +38,10 @@ class EvalGates:
     # Triage — detection. Sensitivity gate is the safety-critical one.
     triage_sensitivity_min: float = field(default_factory=lambda: _env_float("GATE_TRIAGE_SENS", 0.95))
     triage_auroc_min: float = field(default_factory=lambda: _env_float("GATE_TRIAGE_AUROC", 0.85))
+    # Regulator-grade option: also require the sensitivity *lower confidence bound*
+    # (Clopper-Pearson) to clear a threshold. 0.0 disables it (point-estimate only).
+    triage_sensitivity_ci_lower_min: float = field(
+        default_factory=lambda: _env_float("GATE_TRIAGE_SENS_CI_LOW", 0.0))
     # Calibration — lower is better (Expected Calibration Error).
     ece_max: float = field(default_factory=lambda: _env_float("GATE_ECE_MAX", 0.10))
     # Fairness — max allowed gap between best and worst subgroup on the key metric.

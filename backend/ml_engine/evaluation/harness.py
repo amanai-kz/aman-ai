@@ -19,8 +19,10 @@ import json
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Sequence
 
+import numpy as np
+
 from ..registry.models import EvalReport
-from . import calibration, clinical, fairness, nlg, triage
+from . import calibration, clinical, fairness, nlg, stats, triage
 
 SAMPLE_SCHEMA_DOC = """
 Each sample is a dict with (all keys optional except study_id):
@@ -47,6 +49,10 @@ class EvalConfig:
     calibration_bins: int = 10
     label_set: Optional[Sequence[str]] = None
     green_grader: Optional[Callable[[str, str], float]] = None
+    # Statistical rigor: confidence intervals on the headline metrics.
+    ci_alpha: float = 0.05            # 95% CIs
+    bootstrap_n: int = 1000           # bootstrap resamples for AUROC CI
+    bootstrap_seed: int = 0           # reproducible bootstrap
 
 
 class EvalHarness:
@@ -106,6 +112,29 @@ class EvalHarness:
                 y_true, y_score, cfg.triage_threshold, ttf if any(ttf) else None))
             metrics.update(calibration.all_calibration_metrics(
                 y_true, y_score, cfg.calibration_bins))
+
+            # ---- statistical rigor: CIs on the safety-critical metrics -------
+            # Sensitivity gets an exact (Clopper-Pearson) interval; AUROC a
+            # percentile bootstrap. Regulators/reviewers judge the lower bound,
+            # not a point estimate (see registry gates for the optional CI gate).
+            yt_arr = np.asarray(y_true, dtype=int)
+            ys_arr = np.asarray(y_score, dtype=float)
+            n_pos = int(yt_arr.sum())
+            tp = int(((yt_arr == 1) & (ys_arr >= cfg.triage_threshold)).sum())
+            sens_lo, sens_hi = stats.clopper_pearson(tp, n_pos, alpha=cfg.ci_alpha)
+            metrics["triage.sensitivity_ci_low"] = sens_lo
+            metrics["triage.sensitivity_ci_high"] = sens_hi
+            metrics["triage.n"] = float(len(yt_arr))
+            metrics["triage.n_positive"] = float(n_pos)
+
+            def _auroc_on(idx: np.ndarray) -> float:
+                return triage.auroc(yt_arr[idx].tolist(), ys_arr[idx].tolist())
+
+            _, au_lo, au_hi = stats.bootstrap_ci(
+                _auroc_on, len(yt_arr), n_boot=cfg.bootstrap_n,
+                alpha=cfg.ci_alpha, seed=cfg.bootstrap_seed)
+            metrics["triage.auroc_ci_low"] = au_lo
+            metrics["triage.auroc_ci_high"] = au_hi
 
             # ---- fairness: triage sensitivity per subgroup ------------------
             thr = cfg.triage_threshold
