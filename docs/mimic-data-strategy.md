@@ -46,7 +46,7 @@ This is the gating constraint, not the engineering.
   agreement. This is the *same posture* the codebase already encodes for
   `IXITiny`/`MR-RATE` ("research-only") and the `license_cleared` flag.
 - **Mapping to our decisions/flags:**
-  - `ml_engine/ingestion` `DataProvenance.license_cleared` → **stays `False`** for any
+  - `backend/ml_engine/ingestion` `DataProvenance.license_cleared` → **stays `False`** for any
     MIMIC-derived model. Such models are R&D artifacts, never promoted to `PRODUCTION`.
   - **D10** (commercially-cleared dataset) → **NOT** satisfied by MIMIC.
   - **D11** (KZ data residency) → MIMIC is US-sourced under a US DUA; keep it on a
@@ -93,11 +93,13 @@ Code today: PPG/IMU/EMG + HRV (S2). MIMIC waveform DBs (PPG, ECG, ABP, resp) and
 your wearable data. ICU `chartevents` adds vitals time-series.
 
 ### 🟢 Clinical NLP / report generation
-Code today: `ml_engine/alignment` (SCRUM-22, MR-RATE), report-gen, the
-consultation/encounter NLP. `MIMIC-IV-Note` (discharge summaries + radiology reports)
-is a large real-text corpus to **evaluate** report-gen/extraction and to build
-comorbidity/entity extractors. ⚠️ Radiology notes are chest/abdo/etc., **not brain** —
-good for NLP method validation, not brain-specific content.
+Code today: `backend/ml_engine/alignment` (SCRUM-22, MR-RATE — image–text alignment /
+MR-CLIP, **not** general text NLP), `backend/ml_engine/report_gen/generator.py`
+(report generation), the consultation/encounter NLP. `MIMIC-IV-Note` (discharge
+summaries + radiology reports) is a large real-text corpus to **evaluate**
+report-gen/extraction and to build comorbidity/entity extractors. ⚠️ Radiology notes
+are chest/abdo/etc., **not brain** — good for NLP method validation, not brain-specific
+content.
 
 ### 🟢 EHR / FHIR pipeline hardening
 Use MIMIC's realistic EHR shape to exercise the ingestion + export paths
@@ -140,10 +142,16 @@ path or the cleared `--data-dir` production path.
 | Phase | Scope | Output | Gate |
 |---|---|---|---|
 | **0 — Legal & demo** | Owner/legal sign-off on R&D use; download the **ODbL demo** | go/no-go + demo data on a controlled box | legal ✅ |
-| **1 — Ingestion adapter** | `ingestion/ehr.py` against demo; manifest + provenance | labs/notes load into internal frames; tests | unit tests green |
+| **1 — Ingestion adapter** | `backend/ml_engine/ingestion/ehr.py` against demo; manifest + provenance | labs/notes load into internal frames; tests | unit tests green |
 | **2 — S5 lab model** | Reference-range calibration + abnormality model on labs | model (license_cleared=False) + eval report | held-out metrics |
 | **3 — S2 / NLP** | Biosignal pretraining + MIMIC-Note NLP eval | pretrained encoder, NLP benchmark | metrics vs baseline |
 | **4 — Full set (optional)** | Credentialing (CITI+DUA) + BigQuery for scale | scaled training/eval | DUA signed |
+
+> **Credentialing scope (read with the table):** phases 1–3 run **entirely on the
+> ODbL demo** (~100 patients, no DUA, freely downloadable), so they need only the
+> Phase-0 legal sign-off — **not** a DUA. A signed **CITI + DUA** is required *only*
+> for the full credentialed set in phase 4. Phase 0's "legal ✅" authorises R&D
+> intent; it does **not** substitute for the DUA before any credentialed-data access.
 
 ---
 
@@ -177,4 +185,4 @@ path or the cleared `--data-dir` production path.
 - MIMIC-IV-ECG: https://physionet.org/content/mimic-iv-ecg/
 - MIMIC-IV demo (ODbL, open): https://physionet.org/content/mimic-iv-demo/
 - MIMIC on BigQuery: https://mimic.mit.edu/docs/gettingstarted/cloud/
-- Related: `docs/regulatory-readiness.md`, `docs/ingestion-scrum-28.md`, `ml_engine/ingestion/`
+- Related: `docs/regulatory-readiness.md`, `docs/ingestion-scrum-28.md`, `backend/ml_engine/ingestion/`
