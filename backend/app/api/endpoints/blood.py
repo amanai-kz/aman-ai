@@ -20,7 +20,7 @@ from app.services.pdf_parser import (
     extract_lab_data_from_tables
 )
 from app.services.invivo_blood_parser import parse_invivo_blood
-from app.services.blood_nlp_extractor import extract_blood_analysis, BloodNLPExtractor, MARKER_ALIASES
+from app.services.openmed_ner_service import extract_blood_biomarkers_as_dict as extract_blood_analysis, BiomarkerEntity, REFERENCE_RANGES
 
 router = APIRouter()
 
