@@ -200,4 +200,6 @@ def extract_blood_biomarkers_as_dict(text: str) -> dict:
             "critical_count": len(critical),
             "warning_count": len(warnings),
         },
+
     }
+    
