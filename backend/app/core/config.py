@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     
     # AI Services
     MODEL_PATH: str = "./models"
+    # OpenMed PII Deidentification
+    PII_DEIDENTIFICATION_ENABLED: bool = True
     
     class Config:
         env_file = ".env"
