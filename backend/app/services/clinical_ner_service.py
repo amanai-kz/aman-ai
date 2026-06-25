@@ -77,7 +77,8 @@ def _classify_entity(text: str) -> Optional[str]:
 
     return None
 
-
+# TOdo  : MVP — keyword-based classification.
+# Replace with proper multilingual clinical NER model in future iterations.
 def extract_clinical_entities(text: str) -> ClinicalEntities:
     """
     Извлекает структурированные медицинские сущности из SOAP-заметки.
