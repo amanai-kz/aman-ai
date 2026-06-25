@@ -19,7 +19,7 @@ def test_deidentify_date():
     """Дата рождения маскируется."""
     text = "Дата рождения: 15.03.1980"
     result = deidentify(text)
-    assert "15.03.1980" not in result or "[" in result
+    assert "15.03.1980" not in result
 
 
 def test_deidentify_iin():
@@ -33,6 +33,17 @@ def test_deidentify_phone():
     """Казахстанский номер телефона маскируется."""
     text = "Телефон: +7 701 123 45 67"
     result = deidentify(text)
+    assert "701 123 45 67" not in result
+
+
+def test_iin_masked_even_after_openmed_success():
+    """
+    ИИН маскируется даже когда OpenMed успешно отработал.
+    Проверяет defense-in-depth: regex всегда запускается поверх OpenMed.
+    """
+    text = "Пациент Иванов Иван, ИИН 800315300123, тел +7 701 123 45 67"
+    result = deidentify(text)
+    assert "800315300123" not in result
     assert "701 123 45 67" not in result
 
 
