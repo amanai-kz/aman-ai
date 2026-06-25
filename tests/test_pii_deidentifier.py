@@ -1,14 +1,11 @@
 """
-Тесты для PII деидентификации.
+Pytest-тесты для PII деидентификации.
 Покрывает русскоязычные и казахские персональные данные.
 SCRUM-OM-3
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-
-from backend.app.services.pii_deidentifier import deidentify, deidentify_if_enabled
+import pytest
+from app.services.pii_deidentifier import deidentify, deidentify_if_enabled
 
 
 def test_deidentify_russian_name():
@@ -16,7 +13,6 @@ def test_deidentify_russian_name():
     text = "Пациент Иванов Иван Иванович обратился с жалобами."
     result = deidentify(text)
     assert "Иванов" not in result or "[" in result
-    print(f"✅ test_deidentify_russian_name: {result}")
 
 
 def test_deidentify_date():
@@ -24,7 +20,6 @@ def test_deidentify_date():
     text = "Дата рождения: 15.03.1980"
     result = deidentify(text)
     assert "15.03.1980" not in result or "[" in result
-    print(f"✅ test_deidentify_date: {result}")
 
 
 def test_deidentify_iin():
@@ -32,7 +27,6 @@ def test_deidentify_iin():
     text = "ИИН пациента: 800315300123"
     result = deidentify(text)
     assert "800315300123" not in result
-    print(f"✅ test_deidentify_iin: {result}")
 
 
 def test_deidentify_phone():
@@ -40,7 +34,6 @@ def test_deidentify_phone():
     text = "Телефон: +7 701 123 45 67"
     result = deidentify(text)
     assert "701 123 45 67" not in result
-    print(f"✅ test_deidentify_phone: {result}")
 
 
 def test_feature_flag_disabled():
@@ -48,7 +41,6 @@ def test_feature_flag_disabled():
     text = "Иванов Иван, ИИН 800315300123, тел +7 701 123 45 67"
     result = deidentify_if_enabled(text, enabled=False)
     assert result == text
-    print(f"✅ test_feature_flag_disabled: текст не изменён")
 
 
 def test_feature_flag_enabled():
@@ -56,14 +48,12 @@ def test_feature_flag_enabled():
     text = "ИИН 800315300123"
     result = deidentify_if_enabled(text, enabled=True)
     assert "800315300123" not in result
-    print(f"✅ test_feature_flag_enabled: {result}")
 
 
 def test_empty_text():
     """Пустой текст возвращается без изменений."""
     assert deidentify("") == ""
     assert deidentify("   ") == "   "
-    print(f"✅ test_empty_text: OK")
 
 
 def test_full_clinical_note():
@@ -77,17 +67,3 @@ def test_full_clinical_note():
     assert "900101350077" not in result
     assert "01.01.1990" not in result
     assert "777 999 88 55" not in result
-    print(f"✅ test_full_clinical_note:\n  Оригинал: {text}\n  Результат: {result}")
-
-
-if __name__ == "__main__":
-    print("Запуск тестов PII деидентификации...\n")
-    test_deidentify_russian_name()
-    test_deidentify_date()
-    test_deidentify_iin()
-    test_deidentify_phone()
-    test_feature_flag_disabled()
-    test_feature_flag_enabled()
-    test_empty_text()
-    test_full_clinical_note()
-    print("\n✅ Все тесты пройдены!")
