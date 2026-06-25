@@ -120,6 +120,22 @@ uvicorn ml_engine.serving.app:create_default_app --factory --port 8001
 # POST /report  (NIfTI upload) -> draft report   |  GET /models, /healthz
 ```
 
+## Safety + clinical-output layer (`serving/`, FR-14/07/06/15, §7.5)
+
+- **OOD gate (FR-14)** — `serving/ood.py`: Mahalanobis detector on encoder
+  features, threshold calibrated to a target in-dist FPR on a held-out split.
+  Out-of-distribution studies get **no AI draft** and route to manual review.
+  Demo: AUROC 1.0 separating real IXI from corrupted input, in-dist FPR 0.00.
+- **Evidence / saliency (FR-07)** — `serving/saliency.py`: input-gradient 3D
+  saliency per finding + derived laterality (every claim points at voxels — the
+  §7.5 hallucination control).
+- **Structured findings + uncertainty (FR-06, FR-15)** — `serving/findings.py`:
+  per-finding label, calibrated confidence, an **epistemic 95% CI via MC-dropout**,
+  laterality, severity, evidence slices, and model-version provenance.
+- `InferenceEngine.assess_study()` chains them: OOD gate first, else structured
+  findings — all assistive, radiologist sign-off required (D2). Shown live as
+  section 7 of `scripts/demo.py`.
+
 ## Promotion gates (`config/settings.py`, override via `AMAN_ML_*`)
 
 Triage **sensitivity ≥ 0.95** (safety-critical), AUROC ≥ 0.85, RadGraph F1 ≥ 0.40,

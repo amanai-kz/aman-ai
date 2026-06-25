@@ -306,6 +306,70 @@ def run_synthetic_augmentation(args) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# 7. Safety layer: OOD gate + structured findings + evidence (FR-14/06/07/15)
+# --------------------------------------------------------------------------- #
+@section
+def run_safety_layer(args) -> None:
+    rule("7. SAFETY LAYER  (OOD gate + structured findings + evidence, FR-14/06/07/15)")
+    import torch
+    from ml_engine.encoder.data import load_nifti
+    from ml_engine.serving.engine import InferenceEngine
+    from ml_engine.serving import MahalanobisOOD
+
+    enc = os.path.join(os.path.expanduser(args.ckpt_dir), args.encoder_ckpt)
+    tri = os.path.join(os.path.expanduser(args.ckpt_dir), args.triage_ckpt)
+    engine = InferenceEngine.from_checkpoints(enc, tri, device=args.device)
+    img_size, in_ch = engine.encoder.cfg.img_size, engine.encoder.cfg.in_channels
+    paths = _list_volumes(args.image_dir)
+    if not paths:
+        print("  (no IXI volumes found — skipping)"); return
+
+    def feat(p):
+        return engine.features(load_nifti(str(p), img_size=img_size, in_channels=in_ch))
+
+    # Fit covariance on one split; calibrate the threshold on a *held-out*
+    # in-distribution split (not the fit set) so the FPR is honest.
+    n = len(paths)
+    n_fit = min(16, max(2, n // 3))
+    fit_p, cal_p = paths[:n_fit], paths[n_fit:2 * n_fit] or paths[:n_fit]
+    eval_p = paths[2 * n_fit:2 * n_fit + 8] or paths[:8]
+    det = MahalanobisOOD().fit(torch.cat([feat(p) for p in fit_p], 0))
+    det.calibrate(torch.cat([feat(p) for p in cal_p], 0), target_fpr=0.05)
+    engine.attach_ood(det)
+
+    fin_eval = torch.cat([feat(p) for p in eval_p], 0)
+    ood_feats = torch.cat([engine.features(torch.randn(in_ch, *img_size) * 6 + 12)
+                           for _ in range(8)], 0)
+    auroc = det.auroc(fin_eval, ood_feats)
+    in_fpr = float((det.score(fin_eval) > det.threshold_).mean())
+    print("  FR-14 OOD gate — Mahalanobis on encoder features, threshold calibrated")
+    print("  on a held-out in-distribution split (target ~5% FPR).")
+    print(f"  detection AUROC (real IXI vs corrupted input): {auroc:.3f}   "
+          f"in-dist false-positive rate: {in_fpr:.2f}\n")
+
+    # Show structured findings on the most in-distribution held-out scan.
+    best = int(det.score(fin_eval).argmin())
+    p = eval_p[best]
+    vol = load_nifti(str(p), img_size=img_size, in_channels=in_ch)
+    out = engine.assess_study(vol, n_mc=20)
+    sub = os.path.basename(str(p)).split("_")[0]
+    print(f"  real scan {sub}: OOD={out['ood']}  ai_draft={out['ai_draft']}  model={out['model_version']}")
+    if out["ai_draft"]:
+        print(f"  FR-06 structured findings (calibrated conf + MC-dropout 95% CI + FR-07 laterality):")
+        print(f"    {'finding':<24}{'conf':<8}{'95% CI':<16}{'lat':<9}{'severity'}")
+        for f in out["findings"]:
+            ci = f"[{f['ci_low']:.2f},{f['ci_high']:.2f}]"
+            print(f"    {f['label']:<24}{f['confidence']:<8.2f}{ci:<16}{f['laterality']:<9}{f['severity']}")
+
+    bad = torch.randn(in_ch, *img_size) * 6 + 12
+    out_bad = engine.assess_study(bad)
+    print(f"\n  corrupted input: OOD={out_bad['ood']}  ai_draft={out_bad['ai_draft']}")
+    print(f"  -> {out_bad['reason']}")
+    print("\n  FR-14 OOD gate + FR-06 structured findings + FR-07 evidence laterality +")
+    print("  FR-15 model-version provenance — every artifact assistive, D2 sign-off.")
+
+
+# --------------------------------------------------------------------------- #
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Aman AI MRI engine -- end-to-end demo")
     ap.add_argument("--ckpt-dir", default="~/aman-ml/run_artifacts/ckpts")
@@ -334,6 +398,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_probe:
         run_linear_probe(args)
     run_synthetic_augmentation(args)
+    run_safety_layer(args)
 
     rule("DONE")
     print("  Assistive only -- every output requires radiologist sign-off (D2).")

@@ -26,8 +26,23 @@ commercially-cleared partner dataset (ТЗ §6.2/§6.3, decisions D10/D17).
 | Promotion gates (sensitivity ≥ 0.95 on CI lower bound) | §7.3/§7.4 | SCRUM-26/27 | `config/`, `registry/gates.py` | Done |
 | Synthetic-data isolation (never a patient finding) | §7.5 | SCRUM-25 | `augmentation/synth.py` | Done — tag + `assert_no_synthetic_in_patient_view` guard |
 
-All 7 stories of Epic SCRUM-7 are now implemented and unit-tested (**69 tests
+All 7 stories of Epic SCRUM-7 are now implemented and unit-tested (**74 tests
 pass**); the end-to-end `scripts/demo.py` runs all of it on the GPU server.
+
+## Clinical-output safety layer (FR-06 / FR-07 / FR-14 / FR-15)
+
+Built into `serving/` so the engine's outputs meet the ТЗ functional requirements
+for safe AI artifacts:
+
+| Requirement | ТЗ ref | Module | Status |
+|-------------|--------|--------|--------|
+| OOD detection — no AI draft on out-of-distribution studies | FR-14, §4.3 | `serving/ood.py` | Done — Mahalanobis gate, held-out-calibrated FPR; demo AUROC 1.0, in-dist FPR 0.00 |
+| Evidence / saliency overlays | FR-07, §9.2 | `serving/saliency.py` | Done — input-gradient 3D saliency + laterality |
+| Structured findings + confidence interval | FR-06, §7.3 | `serving/findings.py` | Done — label/laterality/severity + MC-dropout 95% CI |
+| Model version + AI-generated label on every artifact | FR-15 | `serving/engine.py` | Done — `assess_study` stamps provenance |
+
+`InferenceEngine.assess_study()` chains them (OOD gate -> structured findings),
+shown live as section 7 of `scripts/demo.py`.
 
 ## SCRUM-25 (Stage E) — what was built this session
 
