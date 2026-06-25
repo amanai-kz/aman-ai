@@ -275,6 +275,37 @@ def run_linear_probe(args) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# 6. Synthetic augmentation: rare-class ablation (SCRUM-25)
+# --------------------------------------------------------------------------- #
+@section
+def run_synthetic_augmentation(args) -> None:
+    rule("6. SYNTHETIC AUGMENTATION  (rare-class ablation, SCRUM-25 / §7.1 Stage E)")
+    from ml_engine.augmentation import run_rare_class_ablation, SYNTHETIC_TAG
+    print("  Task: a critical finding is severely under-represented in training.")
+    print("  We compare the triage head trained WITHOUT vs WITH synthetic, tagged")
+    print("  rare-class positives from the NV-Generate augmentor (procedural")
+    print("  fallback when the gated NVIDIA weights are absent). Synthetic data is")
+    print(f"  tagged ('{SYNTHETIC_TAG}') and never surfaces as a finding (§7.5).\n")
+    res = run_rare_class_ablation(in_dim=128, n_train=4000, n_test=2000,
+                                  n_synth=600, steps=500, seed=0, device="cpu")
+    b, a = res["baseline"], res["augmented"]
+    print(f"  rare class: {res['rare_class']}   train prevalence "
+          f"{res['rare_prevalence_train_baseline']:.3f} -> "
+          f"{res['rare_prevalence_train_augmented']:.3f}  (after augmentation)")
+    print(f"  synthetic samples added: {res['n_synthetic']}  "
+          f"(tagged + isolated from patient view: {res['synthetic_isolated_from_patient_view']})\n")
+    print(f"  {'model':<14}{'rare sensitivity':<20}{'AUROC':<10}{'AUPRC':<10}")
+    print(f"  {'-'*12}  {'-'*16}  {'-'*8}  {'-'*8}")
+    print(f"  {'baseline':<14}{b['sensitivity']:<20.3f}{b['auroc']:<10.3f}{b['auprc']:<10.3f}")
+    print(f"  {'augmented':<14}{a['sensitivity']:<20.3f}{a['auroc']:<10.3f}{a['auprc']:<10.3f}")
+    print(f"\n  rare-class sensitivity margin: {res['sensitivity_margin']:+.3f}"
+          f"   (augmented 95% Wilson CI [{a['sens_ci_low']:.3f}, {a['sens_ci_high']:.3f}])")
+    verdict = ("MEASURABLE GAIN -> acceptance #3 SATISFIED"
+               if res["acceptance_satisfied"] else "no measurable gain this run")
+    print(f"  SCRUM-25 acceptance (ablation shows rare-class gain): {verdict}")
+
+
+# --------------------------------------------------------------------------- #
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Aman AI MRI engine -- end-to-end demo")
     ap.add_argument("--ckpt-dir", default="~/aman-ml/run_artifacts/ckpts")
@@ -302,6 +333,7 @@ def main(argv: list[str] | None = None) -> int:
     show_statistical_rigor(args, summary)
     if not args.skip_probe:
         run_linear_probe(args)
+    run_synthetic_augmentation(args)
 
     rule("DONE")
     print("  Assistive only -- every output requires radiologist sign-off (D2).")

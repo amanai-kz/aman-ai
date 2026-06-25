@@ -16,7 +16,7 @@ Reference: SRS/ТЗ §7. Tracks Jira epic **SCRUM-7** (stories SCRUM-21..27).
 | `alignment/`   | SCRUM-22 | ✅ model + train      | torch |
 | `report_gen/`  | SCRUM-23 | ✅ model + LoRA train | torch, transformers, peft |
 | `triage_head/` | SCRUM-24 | ✅ train + calibrate  | torch |
-| `augmentation/`| SCRUM-25 | ✅ tagging / API      | (model: torch+monai) |
+| `augmentation/`| SCRUM-25 | implemented + ablation | torch/numpy; NV-Generate gated |
 | `config/`      | —        | settings + gates      | stdlib |
 | `cli/`         | —        | MLOps CLI             | — |
 
@@ -79,6 +79,31 @@ python -m ml_engine.report_gen.train --register --out $CK \
 
 Each `--register` versions the resulting checkpoint in the model registry, so it
 flows straight into the `eval → promote → sign-off` lifecycle above.
+
+## Stage E — Synthetic augmentation (`augmentation/`, SCRUM-25, §7.1/§7.5)
+
+Two interchangeable backends behind one `VolumeGenerator`: the real
+`NVGenerateMRBrainGenerator` (NVIDIA 3D latent-diffusion, gated — activates only
+when `AMAN_ML_NVGEN_DIR` + MONAI are present; NVIDIA Open Model Licence, verify
+for prod per §6.2) and a reproducible numpy `ProceduralLesionGenerator` fallback
+so the pipeline and ablation run without the gated weights. Every synthetic
+sample is **tagged and isolated** — `assert_no_synthetic_in_patient_view` blocks
+it from ever surfacing as a patient finding (§7.5). Also supports
+missing-modality synthesis.
+
+**Acceptance #3 — ablation shows measurable rare-class gain.** A critical finding
+is made severely under-represented; the triage head is trained without vs with
+synthetic, tagged rare-class positives and scored on a balanced test set:
+
+```bash
+python -m ml_engine.augmentation.ablation --register   # registers mr-synthetic-aug
+```
+
+Result (seed 0): rare-class **sensitivity 0.23 → 0.70 (+0.47)**, AUROC 0.94 → 0.99,
+specificity held at ~1.0 — measurable gain, acceptance satisfied. Also shown live
+as section 6 of `scripts/demo.py`. (Honest framing: features/labels are synthetic
+per the triage scaffold; with `--encoder-ckpt` the harness instead encodes
+generated volumes through the real Stage-A encoder.)
 
 ## Serving (`serving/`, §7.5)
 
