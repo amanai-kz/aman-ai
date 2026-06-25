@@ -13,37 +13,11 @@ import openmed
 logger = logging.getLogger(__name__)
 
 
-def deidentify(text: str) -> str:
-    """
-    Деидентифицирует персональные данные в тексте с помощью OpenMed.
-
-    Маскирует: ФИО, даты рождения, ИИН, телефоны, адреса.
-
-    Args:
-        text: Исходный клинический текст
-
-    Returns:
-        Текст с заменёнными персональными данными на метки вида [first_name], [date] и т.д.
-    """
-    if not text or not text.strip():
-        return text
-
-    try:
-        result = openmed.deidentify(text)
-        deidentified = result.deidentified_text
-        logger.info(
-            f"PII deidentification: {len(result.pii_entities)} entities masked"
-        )
-        return deidentified
-    except Exception as e:
-        logger.error(f"OpenMed deidentify failed: {e}. Falling back to regex.")
-        return _regex_fallback_deidentify(text)
-
-
 def _regex_fallback_deidentify(text: str) -> str:
     """
-    Резервная деидентификация через regex если OpenMed недоступен.
-    Покрывает казахстанские ИИН, телефоны, даты.
+    Дополнительная деидентификация через regex.
+    Покрывает казахстанские ИИН, телефоны, даты — то что OpenMed пропускает.
+    Запускается ВСЕГДА поверх результата OpenMed (defense-in-depth).
     """
     # ИИН Казахстана (12 цифр)
     text = re.sub(r"\b\d{12}\b", "[ИИН]", text)
@@ -63,6 +37,39 @@ def _regex_fallback_deidentify(text: str) -> str:
     )
 
     return text
+
+
+def deidentify(text: str) -> str:
+    """
+    Деидентифицирует персональные данные в тексте.
+
+    Двухуровневый подход (defense-in-depth):
+    1. OpenMed — маскирует ФИО, адреса и другие сущности
+    2. Regex — всегда маскирует KZ-специфику: ИИН, телефоны, даты
+
+    Args:
+        text: Исходный клинический текст
+
+    Returns:
+        Текст с заменёнными персональными данными
+    """
+    if not text or not text.strip():
+        return text
+
+    # Шаг 1: OpenMed деидентификация
+    try:
+        result = openmed.deidentify(text)
+        deid_text = result.deidentified_text
+        logger.info(
+            f"PII deidentification: {len(result.pii_entities)} entities masked by OpenMed"
+        )
+    except Exception as e:
+        logger.error(f"OpenMed deidentify failed: {e}. Using regex only.")
+        deid_text = text
+
+    # Шаг 2: Regex поверх результата OpenMed — всегда
+    # ИИН/телефон/даты OpenMed пропускает, regex гарантированно закрывает KZ-специфику
+    return _regex_fallback_deidentify(deid_text)
 
 
 def deidentify_if_enabled(text: str, enabled: bool = True) -> str:
