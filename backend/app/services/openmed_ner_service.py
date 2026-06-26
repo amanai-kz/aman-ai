@@ -105,7 +105,7 @@ BIOMARKER_PATTERNS = [
     (r"\bast\b[^\d]*(\d+(?:[.,]\d+)?)\s*(u/l|ед/л)?", "ast", "U/L"),
     (r"холестерин[^\d]*(\d+(?:[.,]\d+)?)\s*(ммоль/л|mmol/l)?", "холестерин", "mmol/L"),
     (r"креатинин[^\d]*(\d+(?:[.,]\d+)?)\s*(мкмоль/л|μmol/l)?", "креатинин", "μmol/L"),
-    (r"\bтsg\b|\bтТГ\b[^\d]*(\d+(?:[.,]\d+)?)", "tsh", "mIU/L"),
+    (r"\bттг\b|\btsh\b[^\d]*(\d+(?:[.,]\d+)?)", "tsh", "mIU/L"),
     (r"crp|срб[^\d]*(\d+(?:[.,]\d+)?)\s*(мг/л|mg/l)?", "crp", "mg/L"),
 ]
 
@@ -202,4 +202,3 @@ def extract_blood_biomarkers_as_dict(text: str) -> dict:
         },
 
     }
-    
