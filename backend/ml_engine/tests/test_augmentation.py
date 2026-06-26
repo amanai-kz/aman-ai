@@ -1,8 +1,12 @@
-"""Tests for synthetic-data tagging & isolation (SCRUM-25, §7.5)."""
+"""Tests for synthetic augmentation: tagging/isolation, generators, ablation
+(SCRUM-25, §7.1 Stage E, §7.5)."""
+import numpy as np
 import pytest
 
 from ml_engine.augmentation import (
     SyntheticAugmentor, SyntheticSample, SYNTHETIC_TAG,
+    NVGenerateMRBrainGenerator, ProceduralLesionGenerator,
+    run_rare_class_ablation,
 )
 from ml_engine.augmentation.synth import assert_no_synthetic_in_patient_view
 
@@ -45,3 +49,61 @@ def test_patient_view_guard_blocks_synthetic():
     assert_no_synthetic_in_patient_view([real])          # ok
     with pytest.raises(AssertionError):
         assert_no_synthetic_in_patient_view([real, syn])  # leak -> blocked
+
+
+# --- generators ------------------------------------------------------------- #
+def test_procedural_generator_shape_and_range():
+    gen = ProceduralLesionGenerator(size=24)
+    vol = gen.generate(sequence="FLAIR", pathology="acute_infarct", seed=3)
+    assert vol.shape == (24, 24, 24)
+    assert vol.dtype == np.float32
+    assert 0.0 <= float(vol.min()) and float(vol.max()) <= 1.0
+
+
+def test_procedural_generator_deterministic():
+    gen = ProceduralLesionGenerator(size=20)
+    a = gen.generate(sequence="T1", pathology="mass_effect", seed=11)
+    b = gen.generate(sequence="T1", pathology="mass_effect", seed=11)
+    assert np.allclose(a, b)
+
+
+def test_lesion_changes_volume():
+    gen = ProceduralLesionGenerator(size=24)
+    healthy = gen.generate(sequence="FLAIR", pathology="missing_modality", seed=5)
+    lesion = gen.generate(sequence="FLAIR", pathology="acute_infarct", seed=5)
+    assert float(np.abs(lesion - healthy).sum()) > 0.0   # lesion injected
+
+
+def test_missing_modality_synthesis():
+    gen = ProceduralLesionGenerator(size=20)
+    t1 = gen.generate(sequence="T1", pathology="missing_modality", seed=2)
+    flair = gen.synthesize_missing_modality(t1, source_seq="T1", target_seq="FLAIR")
+    assert flair.shape == t1.shape
+    assert not np.allclose(flair, t1)                    # contrast remapped
+
+
+def test_generate_volume_returns_tagged_sample_and_array():
+    aug = SyntheticAugmentor(volume_generator=ProceduralLesionGenerator(size=16))
+    sample, vol = aug.generate_volume(sequence="SWI", pathology="intracranial_hemorrhage", seed=1)
+    assert SYNTHETIC_TAG in sample.tags
+    assert vol.shape == (16, 16, 16)
+
+
+def test_nv_generate_backend_unavailable_without_weights():
+    nv = NVGenerateMRBrainGenerator(weights_dir=None)
+    assert nv.available() is False
+    with pytest.raises(RuntimeError):
+        nv.load()
+
+
+# --- ablation (acceptance #3) ----------------------------------------------- #
+def test_rare_class_ablation_shows_measurable_gain():
+    out = run_rare_class_ablation(
+        in_dim=64, n_train=2000, n_test=1500, n_synth=400, steps=250, seed=0,
+    )
+    # synthetic data tagged + isolated from any patient view (§7.5)
+    assert out["synthetic_tag"] == SYNTHETIC_TAG
+    assert out["synthetic_isolated_from_patient_view"] is True
+    # augmentation must lift rare-class sensitivity (acceptance #3)
+    assert out["augmented"]["sensitivity"] > out["baseline"]["sensitivity"]
+    assert out["rare_class_gain"] is True

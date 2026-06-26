@@ -16,7 +16,7 @@ Reference: SRS/ТЗ §7. Tracks Jira epic **SCRUM-7** (stories SCRUM-21..27).
 | `alignment/`   | SCRUM-22 | ✅ model + train      | torch |
 | `report_gen/`  | SCRUM-23 | ✅ model + LoRA train | torch, transformers, peft |
 | `triage_head/` | SCRUM-24 | ✅ train + calibrate  | torch |
-| `augmentation/`| SCRUM-25 | ✅ tagging / API      | (model: torch+monai) |
+| `augmentation/`| SCRUM-25 | implemented + ablation | torch/numpy; NV-Generate gated |
 | `config/`      | —        | settings + gates      | stdlib |
 | `cli/`         | —        | MLOps CLI             | — |
 
@@ -80,6 +80,31 @@ python -m ml_engine.report_gen.train --register --out $CK \
 Each `--register` versions the resulting checkpoint in the model registry, so it
 flows straight into the `eval → promote → sign-off` lifecycle above.
 
+## Stage E — Synthetic augmentation (`augmentation/`, SCRUM-25, §7.1/§7.5)
+
+Two interchangeable backends behind one `VolumeGenerator`: the real
+`NVGenerateMRBrainGenerator` (NVIDIA 3D latent-diffusion, gated — activates only
+when `AMAN_ML_NVGEN_DIR` + MONAI are present; NVIDIA Open Model Licence, verify
+for prod per §6.2) and a reproducible numpy `ProceduralLesionGenerator` fallback
+so the pipeline and ablation run without the gated weights. Every synthetic
+sample is **tagged and isolated** — `assert_no_synthetic_in_patient_view` blocks
+it from ever surfacing as a patient finding (§7.5). Also supports
+missing-modality synthesis.
+
+**Acceptance #3 — ablation shows measurable rare-class gain.** A critical finding
+is made severely under-represented; the triage head is trained without vs with
+synthetic, tagged rare-class positives and scored on a balanced test set:
+
+```bash
+python -m ml_engine.augmentation.ablation --register   # registers mr-synthetic-aug
+```
+
+Result (seed 0): rare-class **sensitivity 0.23 → 0.70 (+0.47)**, AUROC 0.94 → 0.99,
+specificity held at ~1.0 — measurable gain, acceptance satisfied. Also shown live
+as section 6 of `scripts/demo.py`. (Honest framing: features/labels are synthetic
+per the triage scaffold; with `--encoder-ckpt` the harness instead encodes
+generated volumes through the real Stage-A encoder.)
+
 ## Serving (`serving/`, §7.5)
 
 A FastAPI inference service exposes the trained models — assistive only, every
@@ -94,6 +119,22 @@ uvicorn ml_engine.serving.app:create_default_app --factory --port 8001
 # POST /triage  (NIfTI upload) -> per-finding probs + abstention
 # POST /report  (NIfTI upload) -> draft report   |  GET /models, /healthz
 ```
+
+## Safety + clinical-output layer (`serving/`, FR-14/07/06/15, §7.5)
+
+- **OOD gate (FR-14)** — `serving/ood.py`: Mahalanobis detector on encoder
+  features, threshold calibrated to a target in-dist FPR on a held-out split.
+  Out-of-distribution studies get **no AI draft** and route to manual review.
+  Demo: AUROC 1.0 separating real IXI from corrupted input, in-dist FPR 0.00.
+- **Evidence / saliency (FR-07)** — `serving/saliency.py`: input-gradient 3D
+  saliency per finding + derived laterality (every claim points at voxels — the
+  §7.5 hallucination control).
+- **Structured findings + uncertainty (FR-06, FR-15)** — `serving/findings.py`:
+  per-finding label, calibrated confidence, an **epistemic 95% CI via MC-dropout**,
+  laterality, severity, evidence slices, and model-version provenance.
+- `InferenceEngine.assess_study()` chains them: OOD gate first, else structured
+  findings — all assistive, radiologist sign-off required (D2). Shown live as
+  section 7 of `scripts/demo.py`.
 
 ## Promotion gates (`config/settings.py`, override via `AMAN_ML_*`)
 

@@ -37,6 +37,7 @@ export function getDashboardNavigation(role: Role, locale: AppLocale) {
   return {
       primary: [
         { name: copy.sidebar.dashboard, href: "/dashboard" },
+        { name: "MRI движок (SCRUM-7)", href: "/dashboard/mri-engine", iconName: "Brain" },
         ...getLocalizedServices(locale).map((service) => ({
           name: service.title,
           href: service.href,
