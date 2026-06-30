@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { Pool } from "pg"
 import OpenAI from "openai"
 import { randomUUID } from "crypto"
+import {
+  resolveVapiPatientId,
+  verifyVapiWebhookSignature,
+} from "@/lib/security-scrum-62"
+import { PrivilegedApiError, toErrorResponse } from "@/lib/privileged-api"
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ""
+const VAPI_WEBHOOK_SECRET = process.env.VAPI_WEBHOOK_SECRET || ""
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -85,7 +91,18 @@ interface VapiWebhookPayload {
 
 export async function POST(req: NextRequest) {
   try {
-    const payload: VapiWebhookPayload = await req.json()
+    const rawBody = await req.text()
+    const allowUnsigned =
+      process.env.VAPI_WEBHOOK_ALLOW_UNSIGNED === "true" &&
+      process.env.NODE_ENV !== "production"
+    if (
+      !allowUnsigned &&
+      !verifyVapiWebhookSignature(rawBody, req.headers, VAPI_WEBHOOK_SECRET)
+    ) {
+      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
+    }
+
+    const payload: VapiWebhookPayload = JSON.parse(rawBody)
     
     console.log("VAPI Webhook received:", JSON.stringify(payload, null, 2))
     
@@ -165,7 +182,10 @@ export async function POST(req: NextRequest) {
       }
       
       // Extract patient info from metadata
-      const patientId = call.metadata?.userId || null
+      const patientId = await resolveVapiPatientId(
+        call.metadata?.userId,
+        async (sql, params) => (await pool.query(sql, params)).rows
+      )
       const patientName = call.metadata?.userName || "Анонимный пациент"
       
       // Create report in database using raw SQL
@@ -217,6 +237,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "ignored", type: payload.message?.type })
     
   } catch (error) {
+    if (error instanceof PrivilegedApiError) {
+      const { status, body } = toErrorResponse(error)
+      return NextResponse.json(body, { status })
+    }
     console.error("VAPI Webhook error:", error)
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
   }

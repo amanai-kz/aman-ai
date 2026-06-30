@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/auth"
+import { getRouteSession } from "@/lib/security-scrum-62"
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ""
 
@@ -33,6 +35,11 @@ const SYSTEM_PROMPT = `Ты AI-ассистент платформы Aman AI. Am
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getRouteSession(auth)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await req.json()
     const sessionContext = typeof body.sessionContext === "string" ? body.sessionContext.trim() : ""
     const incomingMessages = Array.isArray(body.messages)

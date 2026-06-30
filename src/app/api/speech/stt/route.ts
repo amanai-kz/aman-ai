@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/auth"
+import { getRouteSession } from "@/lib/security-scrum-62"
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ""
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getRouteSession(auth)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const formData = await req.formData()
     const audioFile = formData.get("audio") as File
     // Support language parameter: "kk" (Kazakh), "ru" (Russian), or omit for auto-detect

@@ -1,4 +1,6 @@
 import { auth } from "@/lib/auth"
+import { assertAllowedPdfRecipient, getRouteSession } from "@/lib/security-scrum-62"
+import { PrivilegedApiError, toErrorResponse } from "@/lib/privileged-api"
 import { NextRequest, NextResponse } from "next/server"
 
 async function getResendClient() {
@@ -17,7 +19,7 @@ interface SendPdfEmailRequest {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth()
+    const session = await getRouteSession(auth)
     
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -32,6 +34,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+    assertAllowedPdfRecipient(session, recipientEmail)
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -167,6 +170,10 @@ export async function POST(request: NextRequest) {
       )
     }
   } catch (error) {
+    if (error instanceof PrivilegedApiError) {
+      const { status, body } = toErrorResponse(error)
+      return NextResponse.json(body, { status })
+    }
     console.error("Error sending PDF email:", error)
     return NextResponse.json(
       { error: "Internal server error" },
@@ -174,5 +181,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
-
