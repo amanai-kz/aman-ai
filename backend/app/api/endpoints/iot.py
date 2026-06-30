@@ -8,11 +8,17 @@ Team: Mukhammedzhan
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from datetime import datetime
 
-router = APIRouter()
+from app.core.auth import (
+    CurrentUserContext,
+    get_current_user_context,
+    require_patient_access_if_present,
+)
+
+router = APIRouter(dependencies=[Depends(get_current_user_context)])
 
 
 class PPGData(BaseModel):
@@ -59,8 +65,12 @@ class StressAnalysis(BaseModel):
 
 
 @router.post("/session/start")
-async def start_monitoring_session():
+async def start_monitoring_session(
+    patient_id: Optional[str] = None,
+    current_user: CurrentUserContext = Depends(get_current_user_context),
+):
     """Start a new IoT monitoring session"""
+    require_patient_access_if_present(patient_id, current_user)
     return {
         "session_id": "session_001",
         "status": "active",
@@ -94,8 +104,12 @@ async def get_session_summary(session_id: str):
 
 
 @router.get("/stress/analysis", response_model=StressAnalysis)
-async def get_stress_analysis():
+async def get_stress_analysis(
+    patient_id: Optional[str] = None,
+    current_user: CurrentUserContext = Depends(get_current_user_context),
+):
     """Get current stress analysis based on IoT data"""
+    require_patient_access_if_present(patient_id, current_user)
     return StressAnalysis(
         current_level=35.5,
         trend="stable",
@@ -152,5 +166,4 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             })
     except WebSocketDisconnect:
         print(f"Session {session_id} disconnected")
-
 

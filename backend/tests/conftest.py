@@ -5,6 +5,7 @@ from pathlib import Path
 
 # Use a local SQLite database for tests to avoid external dependencies
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
+os.environ.setdefault("AMAN_AUTH_TEST_MODE", "1")
 
 
 # Ensure backend package is importable during tests

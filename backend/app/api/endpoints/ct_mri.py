@@ -18,10 +18,16 @@ import tempfile
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from pydantic import BaseModel
 
-router = APIRouter()
+from app.core.auth import (
+    CurrentUserContext,
+    get_current_user_context,
+    require_patient_access_if_present,
+)
+
+router = APIRouter(dependencies=[Depends(get_current_user_context)])
 
 # Lazy singleton — built on first use from AMAN_ML_ENCODER_CKPT / AMAN_ML_TRIAGE_CKPT.
 _ENGINE = None
@@ -84,12 +90,16 @@ class ScanHistory(BaseModel):
 async def analyze_scan(
     file: UploadFile = File(...),
     scan_type: str = "mri",
+    patient_id: Optional[str] = None,
+    current_user: CurrentUserContext = Depends(get_current_user_context),
 ):
     """
     Upload and analyze CT/MRI scan.
     
     Supported formats: DICOM, NIfTI, PNG, JPEG
     """
+    require_patient_access_if_present(patient_id, current_user)
+
     # Validate file type
     allowed_types = ["image/png", "image/jpeg", "application/dicom", "application/octet-stream"]
     if file.content_type not in allowed_types:
@@ -154,8 +164,12 @@ async def analyze_scan(
 
 
 @router.get("/history", response_model=List[ScanHistory])
-async def get_scan_history():
+async def get_scan_history(
+    patient_id: Optional[str] = None,
+    current_user: CurrentUserContext = Depends(get_current_user_context),
+):
     """Get history of all scans for current user"""
+    require_patient_access_if_present(patient_id, current_user)
     # TODO: Implement with database
     return []
 
@@ -199,5 +213,4 @@ async def get_available_models():
             },
         ]
     }
-
 

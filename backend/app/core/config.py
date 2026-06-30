@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "super-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    AMAN_AUTH_TEST_MODE: bool = False
     
     # AI Services
     MODEL_PATH: str = "./models"

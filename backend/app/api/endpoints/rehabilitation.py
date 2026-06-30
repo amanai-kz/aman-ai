@@ -8,11 +8,17 @@ Team: Murat, Adilet
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, UploadFile, File, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from datetime import datetime
 
-router = APIRouter()
+from app.core.auth import (
+    CurrentUserContext,
+    get_current_user_context,
+    require_patient_access_if_present,
+)
+
+router = APIRouter(dependencies=[Depends(get_current_user_context)])
 
 
 class Exercise(BaseModel):
@@ -135,8 +141,13 @@ async def get_rehabilitation_programs():
 
 
 @router.post("/session/start")
-async def start_exercise_session(exercise_id: str):
+async def start_exercise_session(
+    exercise_id: str,
+    patient_id: Optional[str] = None,
+    current_user: CurrentUserContext = Depends(get_current_user_context),
+):
     """Start a new exercise session with video tracking"""
+    require_patient_access_if_present(patient_id, current_user)
     return {
         "session_id": "session_001",
         "exercise_id": exercise_id,
@@ -170,12 +181,16 @@ async def stop_exercise_session(session_id: str):
 async def analyze_exercise_video(
     file: UploadFile = File(...),
     exercise_id: str = None,
+    patient_id: Optional[str] = None,
+    current_user: CurrentUserContext = Depends(get_current_user_context),
 ):
     """
     Upload video for movement analysis.
     
     YOLO model will detect body keypoints and analyze movement quality.
     """
+    require_patient_access_if_present(patient_id, current_user)
+
     return {
         "analysis_id": "analysis_001",
         "status": "processing",
@@ -234,8 +249,12 @@ async def websocket_video_stream(websocket: WebSocket, session_id: str):
 
 
 @router.get("/progress")
-async def get_user_progress():
+async def get_user_progress(
+    patient_id: Optional[str] = None,
+    current_user: CurrentUserContext = Depends(get_current_user_context),
+):
     """Get user's rehabilitation progress over time"""
+    require_patient_access_if_present(patient_id, current_user)
     return {
         "total_sessions": 0,
         "total_exercises": 0,
@@ -243,5 +262,4 @@ async def get_user_progress():
         "weekly_progress": [],
         "achievements": [],
     }
-
 

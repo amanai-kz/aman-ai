@@ -6,6 +6,14 @@ from app.api.endpoints import blood
 client = TestClient(app)
 
 
+def _headers() -> dict[str, str]:
+    return {
+        "X-Test-User-Id": "patient-user",
+        "X-Test-Role": "PATIENT",
+        "X-Test-Patient-Id": "patient-123",
+    }
+
+
 def test_upload_pdf_returns_parsed_markers(monkeypatch):
     sample_text = "Гемоглобин 140 г/л\nАЛТ/АСТ 20/18"
     monkeypatch.setattr(blood, "extract_text_from_pdf", lambda _: sample_text)
@@ -14,6 +22,7 @@ def test_upload_pdf_returns_parsed_markers(monkeypatch):
         "/api/v1/services/blood/upload-pdf",
         files={"file": ("test.pdf", b"dummy", "application/pdf")},
         data={"patient_id": "patient-123"},
+        headers=_headers(),
     )
 
     assert response.status_code == 200
@@ -35,7 +44,8 @@ def test_upload_pdf_without_text_returns_422(monkeypatch):
     response = client.post(
         "/api/v1/services/blood/upload-pdf",
         files={"file": ("test.pdf", b"dummy", "application/pdf")},
-        data={"patient_id": "p-1"},
+        data={"patient_id": "patient-123"},
+        headers=_headers(),
     )
 
     assert response.status_code == 422

@@ -9,11 +9,17 @@ Team: Mukhammedzhan
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
 
-router = APIRouter()
+from app.core.auth import (
+    CurrentUserContext,
+    get_current_user_context,
+    require_patient_access_if_present,
+)
+
+router = APIRouter(dependencies=[Depends(get_current_user_context)])
 
 
 class Question(BaseModel):
@@ -42,6 +48,7 @@ class Answer(BaseModel):
 class SubmissionRequest(BaseModel):
     questionnaire_id: str
     answers: List[Answer]
+    patient_id: str | None = None
 
 
 class AnalysisResult(BaseModel):
@@ -132,11 +139,16 @@ async def get_questionnaire(questionnaire_id: str):
 
 
 @router.post("/submit", response_model=AnalysisResult)
-async def submit_questionnaire(submission: SubmissionRequest):
+async def submit_questionnaire(
+    submission: SubmissionRequest,
+    current_user: CurrentUserContext = Depends(get_current_user_context),
+):
     """
     Submit completed questionnaire for AI analysis.
     Returns risk assessment and personalized recommendations.
     """
+    require_patient_access_if_present(submission.patient_id, current_user)
+
     # TODO: Implement actual AI analysis
     return AnalysisResult(
         id="result_001",
@@ -171,5 +183,4 @@ async def get_questionnaire_history():
 async def get_result(result_id: str):
     """Get specific questionnaire result"""
     raise HTTPException(status_code=404, detail="Result not found")
-
 
