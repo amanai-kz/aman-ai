@@ -37,7 +37,13 @@ type TestAnalysis = {
 
 type TestDbOverrides = {
   patient?: {
+    findUnique?: (...args: unknown[]) => Promise<{ id?: string; userId?: string } | null>
+  }
+  doctor?: {
     findUnique?: (...args: unknown[]) => Promise<{ id: string } | null>
+  }
+  doctorPatient?: {
+    findFirst?: (...args: unknown[]) => Promise<{ id: string } | null>
   }
   analysis?: {
     findMany?: (...args: unknown[]) => Promise<TestAnalysis[]>
@@ -102,6 +108,14 @@ function createDb(overrides: TestDbOverrides = {}) {
     patient: {
       findUnique: async () => ({ id: "patient-1" }),
       ...(overrides.patient ?? {}),
+    },
+    doctor: {
+      findUnique: async () => ({ id: "doctor-profile-1" }),
+      ...(overrides.doctor ?? {}),
+    },
+    doctorPatient: {
+      findFirst: async () => ({ id: "doctor-patient-1" }),
+      ...(overrides.doctorPatient ?? {}),
     },
     analysis: {
       findMany: async () => [],
@@ -193,6 +207,31 @@ test("ingestion returns 403 for patient role", async () => {
   })
 })
 
+test("ingestion returns 403 for unassigned doctor", async () => {
+  const response = await createStudyIngestionResponse(
+    createDb({
+      doctorPatient: {
+        findFirst: async () => null,
+      },
+    }),
+    doctorSession,
+    {
+      patientId: "patient-1",
+      studyType: "CT_MRI",
+      modality: "MR",
+      studyDate: "2026-06-12T09:00:00.000Z",
+      source: "dicomweb",
+      sourceStudyId: "study-001",
+    }
+  )
+
+  assert.equal(response.status, 403)
+  assert.deepEqual(response.body, {
+    error: "Doctor is not assigned to this patient",
+    errorKey: "FORBIDDEN",
+  })
+})
+
 test("ingestion is idempotent for the same source and sourceStudyId", async () => {
   const existing = buildAnalysis()
 
@@ -252,6 +291,39 @@ test("inference job creation returns deterministic mock model output", async () 
   assert.equal(data.job.result.modelName, "aman-mock-radiology")
   assert.equal(data.job.result.modelVersion, "0.1.0-test")
   assert.equal(data.job.result.isAiGenerated, true)
+})
+
+test("inference job creation succeeds for admin", async () => {
+  const response = await createInferenceJobResponse(
+    createDb({
+      analysis: {
+        findUnique: async () => buildAnalysis({ patientId: "any-patient" }),
+        update: async () => buildAnalysis({ status: AnalysisStatus.COMPLETED }),
+      },
+    }),
+    adminSession,
+    {
+      analysisId: "analysis-1",
+    }
+  )
+
+  assert.equal(response.status, 200)
+  assert.equal(getSuccessData(response).job.analysisId, "analysis-1")
+})
+
+test("inference job status succeeds for assigned doctor", async () => {
+  const response = await getInferenceJobResponse(
+    createDb({
+      analysis: {
+        findUnique: async () => buildAnalysis({ patientId: "patient-1" }),
+      },
+    }),
+    doctorSession,
+    "infer-analysis-1"
+  )
+
+  assert.equal(response.status, 200)
+  assert.equal(getSuccessData(response).job.analysisId, "analysis-1")
 })
 
 test("OOD inference abstains and returns manual review metadata", async () => {
@@ -454,6 +526,50 @@ test("inference returns 403 for patient role", async () => {
   assert.equal(response.status, 403)
   assert.deepEqual(response.body, {
     error: "Forbidden",
+    errorKey: "FORBIDDEN",
+  })
+})
+
+test("inference creation returns 403 for unassigned doctor", async () => {
+  const response = await createInferenceJobResponse(
+    createDb({
+      analysis: {
+        findUnique: async () => buildAnalysis({ patientId: "patient-2" }),
+      },
+      doctorPatient: {
+        findFirst: async () => null,
+      },
+    }),
+    doctorSession,
+    {
+      analysisId: "analysis-1",
+    }
+  )
+
+  assert.equal(response.status, 403)
+  assert.deepEqual(response.body, {
+    error: "Doctor is not assigned to this patient",
+    errorKey: "FORBIDDEN",
+  })
+})
+
+test("inference status returns 403 for unassigned doctor", async () => {
+  const response = await getInferenceJobResponse(
+    createDb({
+      analysis: {
+        findUnique: async () => buildAnalysis({ patientId: "patient-2" }),
+      },
+      doctorPatient: {
+        findFirst: async () => null,
+      },
+    }),
+    doctorSession,
+    "infer-analysis-1"
+  )
+
+  assert.equal(response.status, 403)
+  assert.deepEqual(response.body, {
+    error: "Doctor is not assigned to this patient",
     errorKey: "FORBIDDEN",
   })
 })

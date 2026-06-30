@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { buildPatientScopedReportWhere } from "@/lib/report-list-scope"
+import { PrivilegedApiError, toErrorResponse } from "@/lib/privileged-api"
 import { Pool } from "pg"
 
 // Direct PostgreSQL connection
@@ -160,7 +162,7 @@ export async function POST(req: NextRequest) {
 }
 
 // GET - Get all consultation reports
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const session = await auth()
     
@@ -189,31 +191,20 @@ export async function GET(req: NextRequest) {
       FROM consultation_reports
     `
     
-    const params: string[] = []
-    
-    // If patient, only show their reports
-    if (session.user.role === "PATIENT") {
-      const patientResult = await pool.query(
-        `SELECT id FROM patients WHERE "userId" = $1`,
-        [session.user.id]
-      )
-      if (patientResult.rows.length > 0) {
-        query += ` WHERE patient_id = $1`
-        params.push(patientResult.rows[0].id)
-      } else {
-        // No patient profile - return empty array
-        return NextResponse.json({ reports: [] })
-      }
-    }
+    const scope = buildPatientScopedReportWhere(session)
+    query += scope.whereSql
     
     query += ` ORDER BY created_at DESC`
     
-    const result = await pool.query(query, params)
+    const result = await pool.query(query, scope.params)
     
     return NextResponse.json({ reports: result.rows })
   } catch (error) {
+    if (error instanceof PrivilegedApiError) {
+      const { status, body } = toErrorResponse(error)
+      return NextResponse.json(body, { status })
+    }
     console.error("Error fetching consultation reports:", error)
     return NextResponse.json({ error: "Failed to fetch reports" }, { status: 500 })
   }
 }
-

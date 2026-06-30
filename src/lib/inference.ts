@@ -2,6 +2,7 @@ import { AnalysisStatus, RiskLevel, ServiceType } from "@prisma/client"
 import { z } from "zod"
 
 import { db } from "@/lib/db"
+import { assertPatientAccess } from "@/lib/authz"
 import { createInMemoryJobQueue } from "@/lib/job-queue"
 import { detectOutOfDistributionStudy, type OodDetectionResult } from "@/lib/ood-detection"
 import {
@@ -13,7 +14,7 @@ import {
   PrivilegedApiError,
 } from "@/lib/privileged-api"
 
-type InferenceDb = Pick<typeof db, "analysis">
+type InferenceDb = Pick<typeof db, "analysis" | "patient" | "doctor" | "doctorPatient">
 type InferenceQueueJob = {
   analysisId: string
 }
@@ -66,6 +67,7 @@ export async function createInferenceJobResponse(
     if (!analysis) {
       throw new PrivilegedApiError("ANALYSIS_NOT_FOUND", "Analysis not found", 404)
     }
+    await assertPatientAccess(session, analysis.patientId, prisma)
 
     const existingJob = getStoredInferenceJob(analysis.result, analysis.id)
     if (existingJob?.status === "COMPLETED" && existingJob.result) {
@@ -122,6 +124,7 @@ export async function getInferenceJobResponse(
     if (!analysis) {
       throw new PrivilegedApiError("ANALYSIS_NOT_FOUND", "Analysis not found", 404)
     }
+    await assertPatientAccess(session, analysis.patientId, prisma)
 
     const queued = inferenceJobQueue.get<InferenceQueueJob, InferenceJobPayload>(id)
     const stored = getStoredInferenceJob(analysis.result, analysis.id)

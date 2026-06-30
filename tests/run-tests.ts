@@ -1,4 +1,5 @@
 import "./authz.test"
+import "./report-list-scope.test"
 import "./session-context.test"
 import "./duration.test"
 import "./worklist.test"
