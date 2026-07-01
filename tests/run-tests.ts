@@ -1,4 +1,7 @@
 import "./authz.test"
+import "./report-list-scope.test"
+import "./security-scrum-62.test"
+import "./api-route-auth-scrum-62.test"
 import "./session-context.test"
 import "./duration.test"
 import "./worklist.test"

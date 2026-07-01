@@ -6,7 +6,11 @@ client = TestClient(app)
 
 
 def _headers(user_id: str) -> dict[str, str]:
-    return {"X-User-Id": user_id}
+    return {
+        "X-Test-User-Id": user_id,
+        "X-Test-Role": "PATIENT",
+        "X-Test-Patient-Id": f"patient-{user_id}",
+    }
 
 
 def _start_encounter(user_id: str = "user-1", state: dict | None = None) -> dict:

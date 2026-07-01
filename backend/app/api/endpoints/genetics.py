@@ -8,11 +8,17 @@ Team: Bekzat, Kaisar
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
 
-router = APIRouter()
+from app.core.auth import (
+    CurrentUserContext,
+    get_current_user_context,
+    require_patient_access_if_present,
+)
+
+router = APIRouter(dependencies=[Depends(get_current_user_context)])
 
 
 class GeneticSequence(BaseModel):
@@ -53,12 +59,16 @@ class GeneticAnalysisResult(BaseModel):
 async def upload_genetic_sequence(
     file: UploadFile = File(...),
     sequence_type: str = "dna",
+    patient_id: Optional[str] = None,
+    current_user: CurrentUserContext = Depends(get_current_user_context),
 ):
     """
     Upload genetic sequence file for analysis.
     
     Supported formats: FASTA, GenBank, VCF
     """
+    require_patient_access_if_present(patient_id, current_user)
+
     allowed_extensions = [".fasta", ".fa", ".gb", ".vcf"]
     
     # TODO: Implement file processing
@@ -70,8 +80,13 @@ async def upload_genetic_sequence(
 
 
 @router.post("/analyze")
-async def analyze_sequence(sequence_id: str):
+async def analyze_sequence(
+    sequence_id: str,
+    patient_id: Optional[str] = None,
+    current_user: CurrentUserContext = Depends(get_current_user_context),
+):
     """Start genetic analysis for uploaded sequence"""
+    require_patient_access_if_present(patient_id, current_user)
     return {
         "analysis_id": "analysis_001",
         "sequence_id": sequence_id,
@@ -168,5 +183,4 @@ async def get_known_risk_factors():
             },
         ]
     }
-
 

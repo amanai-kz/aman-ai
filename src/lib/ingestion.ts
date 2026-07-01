@@ -2,6 +2,7 @@ import { AnalysisStatus, ServiceType } from "@prisma/client"
 import { z } from "zod"
 
 import { db } from "@/lib/db"
+import { assertPatientAccess } from "@/lib/authz"
 import {
   ok,
   requirePrivilegedActor,
@@ -11,7 +12,7 @@ import {
   PrivilegedApiError,
 } from "@/lib/privileged-api"
 
-type IngestionDb = Pick<typeof db, "patient" | "analysis">
+type IngestionDb = Pick<typeof db, "patient" | "analysis" | "doctor" | "doctorPatient">
 
 const ingestionStudySchema = z.object({
   patientId: z.string().min(1),
@@ -86,6 +87,7 @@ export async function createStudyIngestionResponse(
     if (!patient) {
       throw new PrivilegedApiError("PATIENT_NOT_FOUND", "Patient not found", 404)
     }
+    await assertPatientAccess(session, parsed.data.patientId, prisma)
 
     const existing = await findExistingStudy(prisma, parsed.data)
     if (existing) {

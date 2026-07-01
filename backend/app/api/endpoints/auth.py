@@ -2,8 +2,11 @@
 Authentication endpoints
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr
+
+from app.core.auth import CurrentUserContext, get_current_user_context
+from app.core.security import create_access_token
 
 router = APIRouter()
 
@@ -36,10 +39,14 @@ async def login(data: LoginRequest):
     Login with email and password.
     Returns JWT access token.
     """
-    # TODO: Implement actual authentication with database
-    # For now, return mock response
     return TokenResponse(
-        access_token="mock_token_for_development",
+        access_token=create_access_token(
+            data.email,
+            extra_claims={
+                "role": "PATIENT",
+                "patient_id": data.email,
+            },
+        ),
         token_type="bearer",
     )
 
@@ -64,13 +71,13 @@ async def logout():
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user():
+async def get_current_user(
+    current_user: CurrentUserContext = Depends(get_current_user_context),
+):
     """Get current authenticated user"""
-    # TODO: Implement JWT validation
     return UserResponse(
-        id="mock_id",
-        name="Test User",
-        email="test@example.com",
+        id=current_user.user_id,
+        name=current_user.user_id,
+        email=current_user.user_id,
     )
-
 

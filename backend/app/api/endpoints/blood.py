@@ -9,10 +9,16 @@ Team: Nursultan (master), Damir
 """
 
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
 from pydantic import BaseModel
 from datetime import datetime
 
+from app.core.auth import (
+    CurrentUserContext,
+    get_current_user_context,
+    require_patient_access,
+    require_patient_access_if_present,
+)
 from app.services.pdf_parser import (
     extract_text_from_pdf, 
     normalize_text, 
@@ -23,7 +29,7 @@ from app.services.invivo_blood_parser import parse_invivo_blood
 from app.services.openmed_ner_service import extract_blood_biomarkers_as_dict as extract_blood_analysis, BiomarkerEntity, REFERENCE_RANGES
 from app.services.blood_nlp_extractor import MARKER_ALIASES
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user_context)])
 
 
 def match_marker_name(name: str) -> Optional[str]:
@@ -223,11 +229,14 @@ async def upload_blood_test_file(file: UploadFile = File(...)):
 async def upload_blood_pdf(
     file: UploadFile = File(...),
     patient_id: str = Form("unknown"),
+    current_user: CurrentUserContext = Depends(get_current_user_context),
 ):
     """
     Upload Invivo PDF, extract text, parse markers, and return structured data.
     Uses basic parser for backward compatibility.
     """
+    require_patient_access_if_present(patient_id, current_user)
+
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Invalid file type")
 
@@ -286,6 +295,7 @@ async def extract_blood_nlp(
     file: UploadFile = File(...),
     patient_id: str = Form("unknown"),
     save_to_profile: bool = Form(False),
+    current_user: CurrentUserContext = Depends(get_current_user_context),
 ):
     """
     NLP-based blood analysis extraction with comprehensive marker coverage.
@@ -302,6 +312,8 @@ async def extract_blood_nlp(
     
     Supports RU/KZ/EN languages.
     """
+    require_patient_access_if_present(patient_id, current_user)
+
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDF supported.")
 
@@ -386,7 +398,10 @@ async def extract_blood_nlp(
 
 
 @router.post("/save-to-profile")
-async def save_blood_analysis_to_profile(request: SaveBloodAnalysisRequest):
+async def save_blood_analysis_to_profile(
+    request: SaveBloodAnalysisRequest,
+    current_user: CurrentUserContext = Depends(get_current_user_context),
+):
     """
     Save extracted blood analysis to patient profile.
     
@@ -399,6 +414,7 @@ async def save_blood_analysis_to_profile(request: SaveBloodAnalysisRequest):
     # 2. Create new Analysis record with serviceType=BLOOD
     # 3. Store markers in result JSON field
     # 4. Return the created analysis ID
+    require_patient_access(request.patient_id, current_user)
     
     return {
         "success": True,

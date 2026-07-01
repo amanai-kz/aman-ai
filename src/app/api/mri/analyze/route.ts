@@ -64,7 +64,12 @@ export async function POST(req: NextRequest) {
   let result: ScanAnalysisResult
   try {
     const upstream = new FormData()
-    upstream.append("file", file, file.name)
+    // Browsers tag .nii.gz as application/gzip, which the engine endpoint
+    // rejects; the engine keys off the filename, so re-wrap as octet-stream
+    // (an accepted type) while preserving the .nii/.nii.gz name.
+    const buf = await file.arrayBuffer()
+    const blob = new Blob([buf], { type: "application/octet-stream" })
+    upstream.append("file", blob, file.name)
     const res = await fetch(`${BACKEND_URL}/api/v1/services/ct-mri/analyze`, {
       method: "POST",
       body: upstream,
