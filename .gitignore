@@ -109,13 +109,7 @@ nul
 # Graphify (codebase knowledge graph) — regenerated locally / via post-commit hook
 graphify-out/
 
-# MIMIC / PhysioNet EHR data — R&D only (ODbL demo or credentialed full set).
-# NEVER commit a single row. Data lives on a controlled machine OUTSIDE this repo
-# (see docs/mimic-data-strategy.md, SCRUM-64). These patterns are a defensive guard.
+# MIMIC data — never commit
 mimic-iv-demo/
-mimic-iv/
-mimic-*/
-**/mimic-*/
-physionet-data/
-**/physionet-data/
-data/mimic*/
+data/mimic/
+*.csv.gz
