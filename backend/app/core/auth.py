@@ -6,11 +6,14 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth_repository import AuthUserRecord, load_auth_user_by_id
 from app.core.config import settings
+from app.db import get_session
 
 Role = Literal["ADMIN", "DOCTOR", "PATIENT"]
 VALID_ROLES: set[str] = {"ADMIN", "DOCTOR", "PATIENT"}
@@ -61,6 +64,7 @@ async def get_current_user_context(
     x_test_patient_id: str | None = Header(default=None),
     x_test_doctor_id: str | None = Header(default=None),
     x_test_assigned_patient_ids: str | None = Header(default=None),
+    session: AsyncSession = Depends(get_session),
 ) -> CurrentUserContext:
     """
     Resolve the authenticated backend user.
@@ -88,13 +92,13 @@ async def get_current_user_context(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token subject required",
             )
-        return CurrentUserContext(
-            user_id=str(user_id),
-            role=_normalize_role(payload.get("role")),
-            patient_id=payload.get("patient_id"),
-            doctor_id=payload.get("doctor_id"),
-            assigned_patient_ids=_split_ids(payload.get("assigned_patient_ids")),
-        )
+        user = await load_auth_user_by_id(session, str(user_id))
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authenticated user not found",
+            )
+        return _context_from_auth_user(user)
 
     if settings.AMAN_AUTH_TEST_MODE and x_test_user_id:
         return CurrentUserContext(
@@ -108,6 +112,16 @@ async def get_current_user_context(
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Authentication required",
+    )
+
+
+def _context_from_auth_user(user: AuthUserRecord) -> CurrentUserContext:
+    return CurrentUserContext(
+        user_id=user.user_id,
+        role=_normalize_role(user.role),
+        patient_id=user.patient_id,
+        doctor_id=user.doctor_id,
+        assigned_patient_ids=set(user.assigned_patient_ids),
     )
 
 

@@ -28,7 +28,7 @@ The backend auth dependency returns:
 }
 ```
 
-Production requests must use `Authorization: Bearer <jwt>` signed with the backend `SECRET_KEY`. Tokens must include a `role` claim. Patient and doctor ids are optional claims, but patient-scoped checks need the relevant patient id context.
+Production requests must use `Authorization: Bearer <jwt>` signed with the backend `SECRET_KEY`. SCRUM-80 changes backend-issued tokens so role, patient id, doctor id, and doctor assignments are loaded from the database instead of caller input.
 
 ## Role rules
 
@@ -36,7 +36,7 @@ Production requests must use `Authorization: Bearer <jwt>` signed with the backe
 - `PATIENT`: may access only `patient_id` matching their authenticated context.
 - `DOCTOR`: may access patients listed in authenticated `assigned_patient_ids`.
 
-The TypeScript app resolves doctor assignment through Prisma `DoctorPatient`. The FastAPI database currently only has the `encounters` table, so FastAPI cannot query `doctor_patients` yet. Until those tables are shared or mirrored, doctor assignment is accepted only from signed JWT claims or explicit test-mode headers.
+The TypeScript app resolves doctor assignment through Prisma `DoctorPatient`. SCRUM-80 adds a small FastAPI repository that queries the same Prisma-owned `users`, `patients`, `doctors`, and `doctor_patients` tables for login and JWT request authorization.
 
 ## Local and test auth
 
@@ -75,6 +75,5 @@ Do not enable `AMAN_AUTH_TEST_MODE` in production.
 
 ## Production follow-ups
 
-- Replace mock `/auth/login` with real user lookup and password verification.
-- Share or mirror the Prisma user/patient/doctor/doctor_patients tables in FastAPI.
-- Put doctor patient assignments in signed backend-issued tokens only after validating them from the database.
+- Keep Prisma migrations for `users`, `patients`, `doctors`, and `doctor_patients` available to the FastAPI database connection.
+- Consider shorter JWT expiry or assignment-version checks if doctor assignment revocation must take effect immediately.

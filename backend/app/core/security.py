@@ -26,7 +26,7 @@ def create_access_token(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
     
-    to_encode = {"exp": expire, "sub": str(subject), **(extra_claims or {})}
+    to_encode = {**(extra_claims or {}), "exp": expire, "sub": str(subject)}
     encoded_jwt = jwt.encode(
         to_encode,
         settings.SECRET_KEY,
@@ -43,4 +43,3 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     """Hash password"""
     return pwd_context.hash(password)
-
