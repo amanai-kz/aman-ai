@@ -5,18 +5,23 @@ masked-timestep reconstruction objective and versions the resulting
 checkpoint in the model registry (mirrors
 :mod:`ml_engine.encoder.train`'s Stage-A loop for the 3D MRI encoder).
 
-Scaffold caveats (deliberately explicit — do not mistake this for a clinically
-meaningful HRV model):
-  * Real data is MIMIC-IV *demo* ICU ``chartevents`` — hourly-resampled vitals
-    (HR, RR, SpO2, NIBP), **not** continuous PPG/ECG waveforms. See
-    :mod:`ml_engine.ingestion.ehr`'s docstring for what would be needed for
-    true HRV (credentialed MIMIC Waveform DB / MIMIC-IV-ECG).
+Two real MIMIC data sources are supported, at different scope/fidelity
+(deliberately explicit — do not mistake either for a clinically validated
+HRV model):
+  * ``--mimic-dir`` (:class:`EhrVitalsDataset`) — MIMIC-IV *demo* ICU
+    ``chartevents``: hourly-resampled vitals (HR, RR, SpO2, NIBP), **not**
+    continuous waveforms. See :mod:`ml_engine.ingestion.ehr`'s docstring.
+  * ``--ecg-dir`` (:class:`EcgWaveformDataset`) — the open **MIMIC-IV-ECG
+    Demo**: genuine 12-lead, 500 Hz, 10 s waveforms (92 patients). Real
+    R-peak-derived HRV, still demo-scale. See
+    :mod:`ml_engine.ingestion.ecg`'s docstring for what the *full*
+    credentialed MIMIC-IV-ECG corpus would additionally unlock.
   * Every MIMIC-derived checkpoint registers with ``license_cleared=False``
     and is never a production candidate (D10/D11,
     ``docs/mimic-data-strategy.md`` §6).
   * ``SyntheticVitalsWindows`` keeps the loop runnable without any data
-    download at all (e.g. CI); swap in ``--mimic-dir`` for the real demo data,
-    nothing else in the loop changes.
+    download at all (e.g. CI); swap in ``--mimic-dir``/``--ecg-dir`` for real
+    data — nothing else in the loop changes.
 """
 from __future__ import annotations
 
@@ -82,6 +87,36 @@ class EhrVitalsDataset(Dataset):
         return self.windows[idx]
 
 
+class EcgWaveformDataset(Dataset):
+    """Real MIMIC-IV-ECG demo waveforms (see :mod:`ml_engine.ingestion.ecg`).
+
+    Genuine continuous 12-lead ECG, unlike ``EhrVitalsDataset``'s
+    hourly-charted vitals proxy — closer to what "PPG/ECG/HRV" literally
+    means, still demo-scale (92 patients, single 10 s strip each). Use a
+    ``cfg`` with ``in_channels=12`` (leads) and ``seq_len`` matching the
+    record length (500 Hz * 10 s = 5000 samples by default in the v0.1 demo).
+    """
+
+    def __init__(self, ecg_dir: str, cfg: BiosignalEncoderConfig, **load_kwargs: Any):
+        from ..ingestion.ecg import load_ecg_windows, normalise_windows
+        windows, manifests = load_ecg_windows(ecg_dir, **load_kwargs)
+        if windows.shape[1] != cfg.in_channels or windows.shape[2] != cfg.seq_len:
+            raise ValueError(
+                f"cfg (in_channels={cfg.in_channels}, seq_len={cfg.seq_len}) does not "
+                f"match loaded ECG windows {windows.shape[1:]} (leads, samples)"
+            )
+        self.windows = torch.from_numpy(normalise_windows(windows))
+        self.manifests = manifests
+        self.hrv_sdnn_ms = [m.hrv_sdnn_ms for m in manifests]
+        self.data_source = f"mimic-ecg:{ecg_dir} ({len(manifests)} records)"
+
+    def __len__(self) -> int:
+        return len(self.windows)
+
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        return self.windows[idx]
+
+
 # --------------------------------------------------------------------------- #
 # Schedule
 # --------------------------------------------------------------------------- #
@@ -115,6 +150,7 @@ def run_training(
     register: bool = False,
     code_commit: str = "",
     mimic_dir: str | None = None,
+    ecg_dir: str | None = None,
     dataset: Dataset | None = None,
     seed: int = 0,
 ) -> dict[str, Any]:
@@ -128,6 +164,9 @@ def run_training(
         # Caller-supplied dataset (e.g. tests probing a specific cohort).
         ds = dataset
         data_source = getattr(dataset, "data_source", f"custom:{type(dataset).__name__}")
+    elif ecg_dir:
+        ds = EcgWaveformDataset(ecg_dir, cfg)
+        data_source = ds.data_source
     elif mimic_dir:
         ds = EhrVitalsDataset(mimic_dir, cfg)
         data_source = ds.data_source
@@ -227,7 +266,7 @@ def run_training(
 
 def _build_cfg(args: argparse.Namespace) -> BiosignalEncoderConfig:
     return BiosignalEncoderConfig(
-        seq_len=args.seq_len, patch_size=args.patch_size,
+        in_channels=args.in_channels, seq_len=args.seq_len, patch_size=args.patch_size,
         embed_dim=args.embed_dim, depth=args.depth, num_heads=args.heads,
         mask_ratio=args.mask_ratio,
     )
@@ -239,7 +278,10 @@ def main(argv: list[str] | None = None) -> int:
         description="SSL pretrain the S2 biosignal encoder on MIMIC ICU vitals (SCRUM-68)")
     ap.add_argument("--steps", type=int, default=100)
     ap.add_argument("--batch-size", type=int, default=8, dest="batch_size")
-    ap.add_argument("--seq-len", type=int, default=24, dest="seq_len")
+    ap.add_argument("--in-channels", type=int, default=5, dest="in_channels",
+                    help="5 for MIMIC vitals (--mimic-dir); 12 for ECG leads (--ecg-dir)")
+    ap.add_argument("--seq-len", type=int, default=24, dest="seq_len",
+                    help="24 hourly steps for vitals; 5000 samples (500Hz*10s) for ECG")
     ap.add_argument("--patch-size", type=int, default=4, dest="patch_size")
     ap.add_argument("--embed-dim", type=int, default=128, dest="embed_dim")
     ap.add_argument("--depth", type=int, default=4)
@@ -258,7 +300,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--commit", default="", dest="code_commit")
     ap.add_argument("--mimic-dir", default=None, dest="mimic_dir",
                     help="MIMIC-IV demo root (e.g. ~/aman-data/mimic-iv-demo/2.2); "
-                         "omit for synthetic data")
+                         "vitals proxy, use with defaults (--in-channels 5 --seq-len 24)")
+    ap.add_argument("--ecg-dir", default=None, dest="ecg_dir",
+                    help="MIMIC-IV-ECG demo root (e.g. ~/aman-data/mimic-iv-ecg-demo/...-0.1); "
+                         "real waveforms, use with --in-channels 12 --seq-len 5000")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args(argv)
 
@@ -268,7 +313,7 @@ def main(argv: list[str] | None = None) -> int:
         warmup=args.warmup, device=args.device, amp=args.amp,
         dataset_len=args.dataset_len, out_dir=args.out_dir, version=args.version,
         name=args.name, register=args.register, code_commit=args.code_commit,
-        mimic_dir=args.mimic_dir, seed=args.seed,
+        mimic_dir=args.mimic_dir, ecg_dir=args.ecg_dir, seed=args.seed,
     )
     return 0
 

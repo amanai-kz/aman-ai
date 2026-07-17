@@ -4,6 +4,7 @@ Mirrors ``tests/test_encoder_train.py`` (the SCRUM-21 MRI encoder loop) for
 the S2 biosignal encoder: tiny config, a couple of CPU optimiser steps,
 finite/decreasing-capable loss, and a registry-compatible checkpoint.
 """
+import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -12,7 +13,7 @@ pd = pytest.importorskip("pandas")
 from ml_engine.biosignal import BiosignalEncoder1D, BiosignalEncoderConfig
 from ml_engine.biosignal.model import patchify_1d
 from ml_engine.biosignal.train import (
-    EhrVitalsDataset, SyntheticVitalsWindows, cosine_warmup, run_training,
+    EcgWaveformDataset, EhrVitalsDataset, SyntheticVitalsWindows, cosine_warmup, run_training,
 )
 from ml_engine.ingestion.ehr import VITAL_ITEMS
 
@@ -81,3 +82,36 @@ def test_run_training_with_real_ehr_dataset(tmp_path):
     )
     assert summary["steps"] == 2
     assert "mimic-ehr" in summary["data"]
+
+
+def _write_demo_ecg_record(write_dir, record_name, n_leads=4, fs=100, n_samples=200, seed=0):
+    wfdb = pytest.importorskip("wfdb")
+    rng = np.random.default_rng(seed)
+    sig = rng.standard_normal((n_samples, n_leads))
+    wfdb.wrsamp(
+        record_name, fs=fs, units=["mV"] * n_leads, sig_name=[f"L{i}" for i in range(n_leads)],
+        p_signal=sig, fmt=["16"] * n_leads, write_dir=str(write_dir),
+    )
+
+
+def test_run_training_with_real_ecg_dataset(tmp_path):
+    pytest.importorskip("wfdb")
+    pytest.importorskip("scipy")
+    ecg_dir = tmp_path / "ecg-demo"
+    files = ecg_dir / "files" / "p1" / "s1"
+    files.mkdir(parents=True)
+    _write_demo_ecg_record(files, "rec0", n_leads=4, fs=100, n_samples=200)
+    (ecg_dir / "RECORDS").write_text("files/p1/s1/rec0\n")
+
+    cfg = BiosignalEncoderConfig(in_channels=4, seq_len=200, patch_size=20, embed_dim=16,
+                                 depth=2, num_heads=2)
+    ds = EcgWaveformDataset(str(ecg_dir), cfg)
+    assert len(ds) == 1
+    assert "mimic-ecg" in ds.data_source
+
+    summary = run_training(
+        cfg, steps=2, batch_size=1, warmup=1, device="cpu",
+        out_dir=tmp_path / "ckpt", log_every=1, register=False, seed=0, dataset=ds,
+    )
+    assert summary["steps"] == 2
+    assert "mimic-ecg" in summary["data"]
