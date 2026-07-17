@@ -13,6 +13,7 @@ Sub-packages
 - ``report_gen``  SCRUM-23  LLM + LoRA report generator
 - ``triage_head`` SCRUM-24  calibrated triage classifier
 - ``augmentation``SCRUM-25  NV-Generate-MR-Brain synthetic augmentation
+- ``biosignal``   SCRUM-68  S2 biosignal encoder (SSL on MIMIC ICU vitals)
 
 Reference: SRS/ТЗ §7 (ML / AI Pipeline), Phases P1-P2.
 """
