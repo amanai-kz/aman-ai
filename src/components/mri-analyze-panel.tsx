@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useRef, useState } from "react"
+import Image from "next/image"
 import {
   Brain,
   UploadCloud,
@@ -15,9 +16,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
-// Surface for the SCRUM-7 MRI engine: upload a 3D brain MRI (.nii/.nii.gz),
-// run it through the real serving pipeline (encoder -> calibrated triage head
-// -> abstention gate) and show the result. The analysis is also persisted and
+// Surface for the SCRUM-7 MRI engine: upload a 2D MRI slice for segmentation or
+// a 3D NIfTI study for triage and show the configured model's result. The
+// analysis is also persisted and
 // lands on the radiologist worklist for sign-off (decision D2 — assistive only).
 
 type EngineResult = {
@@ -26,6 +27,16 @@ type EngineResult = {
   risk_level: string
   recommendations: string[]
   processing_time_ms: number
+  segmentation?: {
+    mask_png_base64: string
+    width: number
+    height: number
+    positive_pixel_count: number
+    positive_area_fraction: number
+    max_probability: number
+    mean_positive_probability: number | null
+    threshold: number
+  }
 }
 
 type AnalyzeResponse = {
@@ -46,11 +57,29 @@ const RISK_STYLES: Record<string, string> = {
 
 const RISK_LABEL: Record<string, string> = {
   HIGH: "Высокий риск",
-  MODERATE: "Средний / требует разбора",
+  MODERATE: "Требует проверки клиницистом",
   LOW: "Низкий риск",
 }
 
 const ASSISTIVE_MARK = "Assistive output"
+
+type SegmentationMode = "engine" | "static" | "adaptive"
+
+const MODE_COPY: Record<SegmentationMode, { eyebrow: string; detail: string }> = {
+  engine: {
+    eyebrow: "MRI движок · SCRUM-7",
+    detail: "Загрузите срез PNG/JPEG/TIFF для сегментации или 3D-снимок NIfTI.",
+  },
+  static: {
+    eyebrow: "MRI сегментация · Static",
+    detail: "Загрузите срез PNG/JPEG/TIFF для сегментации фиксированной настроенной моделью.",
+  },
+  adaptive: {
+    eyebrow: "MRI сегментация · Adaptive",
+    detail:
+      "Загрузите срез PNG/JPEG/TIFF. Сейчас этот режим использует ту же фиксированную модель и не обучается на загруженных данных.",
+  },
+}
 
 function parseFinding(line: string): { name: string; prob: number | null } {
   const m = line.match(/^(.*?):\s*([0-9.]+)\s*$/)
@@ -58,7 +87,13 @@ function parseFinding(line: string): { name: string; prob: number | null } {
   return { name: m[1].trim(), prob: parseFloat(m[2]) }
 }
 
-export function MriAnalyzePanel({ patientId }: { patientId: string | null }) {
+export function MriAnalyzePanel({
+  patientId,
+  mode = "engine",
+}: {
+  patientId: string | null
+  mode?: SegmentationMode
+}) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -68,8 +103,13 @@ export function MriAnalyzePanel({ patientId }: { patientId: string | null }) {
 
   const pick = (f: File | undefined) => {
     if (!f) return
-    if (!/\.nii(\.gz)?$/i.test(f.name)) {
-      setError("Нужен файл МРТ в формате .nii или .nii.gz (3D объём).")
+    const allowed = mode === "engine" ? /\.(nii(\.gz)?|png|jpe?g|tiff?)$/i : /\.(png|jpe?g|tiff?)$/i
+    if (!allowed.test(f.name)) {
+      setError(
+        mode === "engine"
+          ? "Нужен срез PNG/JPEG/TIFF или объём NIfTI (.nii/.nii.gz)."
+          : "Нужен срез MRI в формате PNG, JPEG или TIFF."
+      )
       return
     }
     setError(null)
@@ -89,6 +129,11 @@ export function MriAnalyzePanel({ patientId }: { patientId: string | null }) {
       const res = await fetch("/api/mri/analyze", { method: "POST", body: fd })
       const data = await res.json()
       if (!res.ok) {
+        if (res.status === 503) {
+          throw new Error(
+            "Модель сегментации пока недоступна. Для инференса требуется настроенная совместимая модель; результат анализа не создан."
+          )
+        }
         throw new Error(data?.error || `Ошибка анализа (${res.status})`)
       }
       setResult((data as AnalyzeResponse).analysis)
@@ -109,20 +154,21 @@ export function MriAnalyzePanel({ patientId }: { patientId: string | null }) {
   const engine = result?.result
   const findings = (engine?.findings ?? []).filter((f) => !f.startsWith(ASSISTIVE_MARK))
   const assistiveNote = (engine?.findings ?? []).find((f) => f.startsWith(ASSISTIVE_MARK))
+  const modeCopy = MODE_COPY[mode]
+  const acceptsVolumes = mode === "engine"
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10 space-y-8">
       {/* Header */}
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-xs font-medium tracking-widest text-muted-foreground uppercase">
-          <Brain className="w-4 h-4" /> MRI движок · SCRUM-7
+          <Brain className="w-4 h-4" /> {modeCopy.eyebrow}
         </div>
         <h1 className="text-3xl font-semibold tracking-tight">Анализ МРТ головного мозга</h1>
         <p className="text-muted-foreground max-w-2xl">
-          Загрузите 3D-снимок (<code className="text-foreground">.nii</code> /{" "}
-          <code className="text-foreground">.nii.gz</code>). Снимок проходит реальный
-          serving-пайплайн: энкодер → калиброванная триаж-голова → порог отказа.
-          Результат — ассистивный и уходит радиологу на подпись.
+          {modeCopy.detail} Снимок проходит только настроенную модель; при отсутствии
+          совместимых весов система не создаёт результат. Вывод ассистивный и требует
+          проверки клиницистом.
         </p>
       </div>
 
@@ -155,7 +201,11 @@ export function MriAnalyzePanel({ patientId }: { patientId: string | null }) {
         <input
           ref={inputRef}
           type="file"
-          accept=".nii,.nii.gz,application/gzip,application/octet-stream"
+          accept={
+            acceptsVolumes
+              ? ".png,.jpg,.jpeg,.tif,.tiff,.nii,.nii.gz,image/png,image/jpeg,image/tiff,application/gzip,application/octet-stream"
+              : ".png,.jpg,.jpeg,.tif,.tiff,image/png,image/jpeg,image/tiff"
+          }
           className="hidden"
           onChange={(e) => pick(e.target.files?.[0])}
         />
@@ -166,7 +216,9 @@ export function MriAnalyzePanel({ patientId }: { patientId: string | null }) {
         <p className="text-sm text-muted-foreground mt-1">
           {file
             ? `${(file.size / 1024 / 1024).toFixed(1)} МБ`
-            : "Формат NIfTI (.nii, .nii.gz)"}
+            : acceptsVolumes
+              ? "PNG/JPEG/TIFF (срез) или NIfTI (объём) · максимум 10 МБ"
+              : "PNG/JPEG/TIFF (срез) · максимум 10 МБ"}
         </p>
       </div>
 
@@ -175,7 +227,7 @@ export function MriAnalyzePanel({ patientId }: { patientId: string | null }) {
         <Button onClick={analyze} disabled={!file || !patientId || loading} size="lg">
           {loading ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin" /> Анализирую на GPU…
+              <Loader2 className="w-4 h-4 animate-spin" /> Выполняется сегментация…
             </>
           ) : (
             <>
@@ -214,7 +266,7 @@ export function MriAnalyzePanel({ patientId }: { patientId: string | null }) {
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
             <div>
-              <div className="text-muted-foreground">Severity / confidence</div>
+              <div className="text-muted-foreground">Максимальный отклик модели</div>
               <div className="text-2xl font-semibold">{(engine.confidence * 100).toFixed(1)}%</div>
             </div>
             <div>
@@ -252,6 +304,27 @@ export function MriAnalyzePanel({ patientId }: { patientId: string | null }) {
               )
             })}
           </div>
+
+          {/* Recommendations */}
+          {engine.segmentation && (
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-muted-foreground">
+                Маска сегментации (порог {engine.segmentation.threshold})
+              </div>
+              {/* The mask contains no source pixels; it is still protected patient analysis data. */}
+              <Image
+                src={`data:image/png;base64,${engine.segmentation.mask_png_base64}`}
+                alt="Маска сегментации для проверки радиологом"
+                width={engine.segmentation.width}
+                height={engine.segmentation.height}
+                unoptimized
+                className="rounded-lg border bg-black [image-rendering:pixelated]"
+              />
+              <div className="text-xs text-muted-foreground">
+                Выделено {(engine.segmentation.positive_area_fraction * 100).toFixed(2)}% обработанного среза.
+              </div>
+            </div>
+          )}
 
           {/* Recommendations */}
           {engine.recommendations?.length > 0 && (

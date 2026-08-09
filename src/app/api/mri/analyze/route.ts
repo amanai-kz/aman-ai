@@ -4,6 +4,7 @@ import { AnalysisStatus, Prisma, RiskLevel, ServiceType } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { assertPatientAccess } from "@/lib/authz"
+import { createBackendAccessToken } from "@/lib/backend-auth"
 import { toErrorResponse } from "@/lib/privileged-api"
 
 // MRI analyze + persist: runs the study through the ML engine (backend
@@ -18,7 +19,21 @@ type ScanAnalysisResult = {
   confidence: number
   risk_level: string
   recommendations: string[]
+  processing_time_ms: number
+  segmentation?: {
+    mask_png_base64: string
+    width: number
+    height: number
+    positive_pixel_count: number
+    positive_area_fraction: number
+    max_probability: number
+    mean_positive_probability: number | null
+    threshold: number
+  }
 }
+
+const MAX_SLICE_UPLOAD_BYTES = 10 * 1024 * 1024
+const MAX_NIFTI_UPLOAD_BYTES = 64 * 1024 * 1024
 
 function mapRisk(level: string): RiskLevel {
   switch (level) {
@@ -60,27 +75,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(body, { status })
   }
 
+  const isNifti = /\.nii(\.gz)?$/i.test(file.name)
+  const maxUploadBytes = isNifti ? MAX_NIFTI_UPLOAD_BYTES : MAX_SLICE_UPLOAD_BYTES
+  if (file.size > maxUploadBytes) {
+    return NextResponse.json({ error: "MRI image exceeds the upload limit" }, { status: 413 })
+  }
+
   // 1) Inference on the ML backend (real engine; see backend ct_mri.analyze).
   let result: ScanAnalysisResult
   try {
     const upstream = new FormData()
-    // Browsers tag .nii.gz as application/gzip, which the engine endpoint
-    // rejects; the engine keys off the filename, so re-wrap as octet-stream
-    // (an accepted type) while preserving the .nii/.nii.gz name.
+    // Browsers tag .nii.gz as application/gzip; normalize only NIfTI uploads
+    // while preserving standard image MIME types used by segmentation.
     const buf = await file.arrayBuffer()
-    const blob = new Blob([buf], { type: "application/octet-stream" })
+    const blob = new Blob([buf], {
+      type: isNifti ? "application/octet-stream" : file.type,
+    })
     upstream.append("file", blob, file.name)
-    const res = await fetch(`${BACKEND_URL}/api/v1/services/ct-mri/analyze`, {
+    const token = createBackendAccessToken(session.user.id)
+    const endpoint = new URL("/api/v1/services/ct-mri/analyze", BACKEND_URL)
+    endpoint.searchParams.set("patient_id", patientId)
+    const res = await fetch(endpoint, {
       method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
       body: upstream,
     })
     if (!res.ok) {
-      throw new Error(`backend responded ${res.status}`)
+      const upstreamError = (await res.json().catch(() => null)) as { detail?: string } | null
+      return NextResponse.json(
+        { error: upstreamError?.detail ?? "MRI inference service failed" },
+        { status: res.status }
+      )
     }
     result = (await res.json()) as ScanAnalysisResult
-  } catch (err) {
+  } catch {
     return NextResponse.json(
-      { error: `inference failed: ${String(err)}` },
+      { error: "MRI inference service is unavailable" },
       { status: 502 }
     )
   }

@@ -7,6 +7,7 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import {
   buildDoctorCaseDetail,
   buildMockDoctorCaseDetail,
+  getStoredSegmentation,
 } from "@/lib/doctor-case-detail"
 
 async function getCaseDetail(id: string, actor: { userId: string; name?: string | null }) {
@@ -78,6 +79,7 @@ async function getCaseDetail(id: string, actor: { userId: string; name?: string 
         riskLevel: analysis.riskLevel,
         findings: analysis.findings,
         confidence: analysis.confidence,
+        segmentation: getStoredSegmentation(analysis.result),
         updatedAt: analysis.updatedAt,
         review: analysis.review
           ? {

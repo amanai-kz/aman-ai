@@ -35,6 +35,11 @@ scikit-learn==1.6.0
 pillow==11.0.0
 opencv-python-headless==4.10.0.84
 
+# Optional MRI segmentation runtime (activated only with AMAN_MRI_SEGMENTATION_CKPT)
+torch==2.13.0
+torchvision==0.28.0
+segmentation-models-pytorch==0.5.0
+
 # Utils
 python-dotenv==1.0.1
 redis==5.2.1

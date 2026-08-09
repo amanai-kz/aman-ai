@@ -51,7 +51,7 @@ const serviceDefinitions: ServiceDefinition[] = [
     id: "mri-seg-static",
     iconName: "BrainCircuit",
     href: "/dashboard/mri-seg-static",
-    embedUrl: "https://seg-stat.aman-ai.kz",
+    embedUrl: null,
     team: ["Murat"],
     status: "active",
     copy: {
@@ -76,24 +76,24 @@ const serviceDefinitions: ServiceDefinition[] = [
     id: "mri-seg-adaptive",
     iconName: "Brain",
     href: "/dashboard/mri-seg-adaptive",
-    embedUrl: "https://seg-adap.aman-ai.kz",
+    embedUrl: null,
     team: ["Murat"],
     status: "active",
     copy: {
       ru: {
         title: "MRI Сегментация (Adaptive)",
         description: "Адаптивная сегментация МРТ снимков",
-        longDescription: "Адаптивная сегментация с постоянным улучшением модели",
+        longDescription: "Сегментация МРТ с фиксированной настроенной моделью",
       },
       en: {
         title: "MRI Segmentation (Adaptive)",
         description: "Adaptive MRI scan segmentation",
-        longDescription: "Adaptive segmentation with continuous model improvement",
+        longDescription: "MRI segmentation using the configured fixed model",
       },
       kk: {
         title: "MRI Сегментация (Adaptive)",
         description: "МРТ кескіндерін бейімделетін сегментациялау",
-        longDescription: "Модельді үздіксіз жетілдіретін бейімделетін сегментация",
+        longDescription: "Бапталған тұрақты модель арқылы МРТ сегментациясы",
       },
     },
   },

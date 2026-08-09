@@ -7,10 +7,9 @@ of neurodegenerative diseases.
 Team: Murat, Adilet
 
 ML inference is wired to the MRI engine (``ml_engine.serving``, Epic SCRUM-7):
-when encoder + triage checkpoints are configured via env it returns real
-calibrated triage; otherwise it falls back to the prior mock so the endpoint
-keeps working in environments without the models. Assistive only — output is
-flagged for radiologist sign-off (decision D2).
+The 3D triage engine and 2D segmentation model are separate, opt-in stages.
+Neither returns fabricated clinical findings when its checkpoint is absent.
+Assistive only — output is flagged for radiologist sign-off (decision D2).
 """
 
 import os
@@ -26,12 +25,24 @@ from app.core.auth import (
     get_current_user_context,
     require_patient_access_if_present,
 )
+from app.services.mri_segmentation import (
+    IncompatibleCheckpointError,
+    InferenceError,
+    MalformedImageError,
+    ModelNotConfiguredError,
+    MriSegmenter,
+    decode_and_preprocess,
+)
 
 router = APIRouter(dependencies=[Depends(get_current_user_context)])
 
 # Lazy singleton — built on first use from AMAN_ML_ENCODER_CKPT / AMAN_ML_TRIAGE_CKPT.
 _ENGINE = None
 _ENGINE_TRIED = False
+_SEGMENTER = None
+MAX_SEGMENTATION_UPLOAD_BYTES = 10 * 1024 * 1024
+SEGMENTATION_CONTENT_TYPES = {"image/png", "image/jpeg", "image/tiff"}
+SEGMENTATION_EXTENSIONS = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
 
 
 def _get_engine():
@@ -49,6 +60,14 @@ def _get_engine():
         except Exception:  # noqa: BLE001 — never let model load break the API
             _ENGINE = None
     return _ENGINE
+
+
+def _get_segmenter():
+    """Build the segmentation model once; failed configuration may be retried."""
+    global _SEGMENTER
+    if _SEGMENTER is None:
+        _SEGMENTER = MriSegmenter.from_environment()
+    return _SEGMENTER
 
 
 def _risk_level(severity: float, abstain: bool) -> str:
@@ -76,6 +95,7 @@ class ScanAnalysisResult(BaseModel):
     risk_level: str  # "low", "medium", "high"
     recommendations: List[str]
     processing_time_ms: int
+    segmentation: Optional[dict] = None
 
 
 class ScanHistory(BaseModel):
@@ -96,21 +116,58 @@ async def analyze_scan(
     """
     Upload and analyze CT/MRI scan.
     
-    Supported formats: DICOM, NIfTI, PNG, JPEG
+    Supported formats: NIfTI for 3D triage; PNG/JPEG/TIFF for 2D segmentation.
     """
     require_patient_access_if_present(patient_id, current_user)
 
-    # Validate file type
-    allowed_types = ["image/png", "image/jpeg", "application/dicom", "application/octet-stream"]
-    if file.content_type not in allowed_types:
+    filename = (file.filename or "").lower()
+    is_nifti = filename.endswith((".nii", ".nii.gz"))
+    is_segmentation_image = filename.endswith(SEGMENTATION_EXTENSIONS)
+    if is_segmentation_image and file.content_type not in SEGMENTATION_CONTENT_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type. Allowed: {allowed_types}"
+            detail="Invalid file type. Allowed: PNG, JPEG, TIFF, or NIfTI",
+        )
+    if not is_nifti and not is_segmentation_image:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Allowed: PNG, JPEG, TIFF, or NIfTI",
+        )
+
+    if is_segmentation_image:
+        image_bytes = await file.read(MAX_SEGMENTATION_UPLOAD_BYTES + 1)
+        if len(image_bytes) > MAX_SEGMENTATION_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="MRI image exceeds the upload limit")
+        try:
+            input_tensor = decode_and_preprocess(image_bytes)
+            t0 = time.time()
+            segmentation = _get_segmenter().segment(input_tensor)
+        except MalformedImageError as exc:
+            raise HTTPException(status_code=422, detail="Malformed or unsupported MRI image") from exc
+        except ModelNotConfiguredError as exc:
+            raise HTTPException(status_code=503, detail="MRI segmentation model is not configured") from exc
+        except IncompatibleCheckpointError as exc:
+            raise HTTPException(status_code=503, detail="MRI segmentation checkpoint is incompatible") from exc
+        except InferenceError as exc:
+            raise HTTPException(status_code=422, detail="MRI segmentation inference failed") from exc
+
+        area_percent = segmentation.positive_area_fraction * 100
+        return ScanAnalysisResult(
+            id=f"scan_{int(t0)}",
+            scan_type="mri",
+            status="completed",
+            findings=[
+                f"Model-produced segmentation region: {area_percent:.2f}% of the processed slice.",
+                "Assistive output — requires radiologist sign-off (D2).",
+            ],
+            confidence=segmentation.max_probability,
+            risk_level="review",
+            recommendations=["Radiologist must review the source slice and segmentation mask."],
+            processing_time_ms=int((time.time() - t0) * 1000),
+            segmentation=segmentation.as_dict(),
         )
 
     engine = _get_engine()
-    filename = file.filename or ""
-    is_nifti = filename.endswith((".nii", ".nii.gz"))
 
     # Real ML inference when the engine is configured and we have a 3D volume.
     if engine is not None and is_nifti:
@@ -144,23 +201,7 @@ async def analyze_scan(
             processing_time_ms=int((time.time() - t0) * 1000),
         )
 
-    # Fallback: engine not configured, or non-volumetric upload -> prior mock.
-    return ScanAnalysisResult(
-        id="scan_001",
-        scan_type=scan_type,
-        status="completed",
-        findings=[
-            "No significant abnormalities detected",
-            "Brain structure within normal parameters",
-        ],
-        confidence=0.95,
-        risk_level="low",
-        recommendations=[
-            "Continue regular health monitoring",
-            "Schedule follow-up scan in 12 months",
-        ],
-        processing_time_ms=2500,
-    )
+    raise HTTPException(status_code=503, detail="MRI triage model is not configured")
 
 
 @router.get("/history", response_model=List[ScanHistory])
@@ -213,4 +254,3 @@ async def get_available_models():
             },
         ]
     }
-

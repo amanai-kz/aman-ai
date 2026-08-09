@@ -3,6 +3,7 @@ import { ServiceIcon } from "@/components/service-icon"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import type { ReactNode } from "react"
 
 export type DashboardServiceViewModel = {
   title: string
@@ -14,7 +15,13 @@ export type DashboardServiceViewModel = {
   status: "active" | "coming" | "maintenance"
 }
 
-export function DashboardServiceView({ service }: { service: DashboardServiceViewModel }) {
+export function DashboardServiceView({
+  service,
+  children,
+}: {
+  service: DashboardServiceViewModel
+  children?: ReactNode
+}) {
   return (
     <>
       <DashboardHeader title={service.title} />
@@ -48,7 +55,11 @@ export function DashboardServiceView({ service }: { service: DashboardServiceVie
         </div>
 
         <div className="flex-1 p-8 md:p-12">
-          {service.embedUrl ? (
+          {children ? (
+            <div className="min-h-[400px] border border-border rounded-2xl overflow-hidden bg-background">
+              {children}
+            </div>
+          ) : service.embedUrl ? (
             <div className="h-full min-h-[600px] border border-border rounded-2xl overflow-hidden bg-background">
               <iframe
                 src={service.embedUrl}
