@@ -20,6 +20,14 @@ export type DoctorCaseGeneratedLabelKey =
   | "behavioralRiskScreeningSummary"
   | "aiTriageSummary"
 
+export type DoctorCaseSegmentation = {
+  maskPngBase64: string
+  width: number
+  height: number
+  positiveAreaFraction: number
+  threshold: number
+}
+
 export interface DoctorCaseDetail {
   id: string
   patientName: string
@@ -55,6 +63,7 @@ export interface DoctorCaseDetail {
       sliceCount: number
       sourceKey: "pacsSyncPlaceholder" | "structuredSourcePlaceholder"
     }
+    segmentation: DoctorCaseSegmentation | null
   }
   ai: {
     generatedLabelKey: DoctorCaseGeneratedLabelKey
@@ -91,6 +100,7 @@ type DoctorCaseDetailInput = {
   findings: string[]
   confidence?: number | null
   ood?: OodDetectionResult | null
+  segmentation?: DoctorCaseSegmentation | null
   updatedAt: Date
   review?: {
     findingsDraft?: string | null
@@ -171,6 +181,7 @@ export function buildDoctorCaseDetail(input: DoctorCaseDetailInput): DoctorCaseD
         sliceCount: viewerMode === "radiology" ? 96 : 0,
         sourceKey: viewerMode === "radiology" ? "pacsSyncPlaceholder" : "structuredSourcePlaceholder",
       },
+      segmentation: viewerMode === "radiology" ? input.segmentation ?? null : null,
     },
     ai: {
       generatedLabelKey: getGeneratedLabelKey(input.studyType, priority),
@@ -200,6 +211,29 @@ export function buildDoctorCaseDetail(input: DoctorCaseDetailInput): DoctorCaseD
       createdAt: item.createdAt.toISOString(),
     })),
     persistenceUnavailable: input.persistenceUnavailable ?? false,
+  }
+}
+
+export function getStoredSegmentation(result: unknown): DoctorCaseSegmentation | null {
+  if (!result || typeof result !== "object" || !("segmentation" in result)) return null
+  const segmentation = (result as { segmentation?: unknown }).segmentation
+  if (!segmentation || typeof segmentation !== "object") return null
+  const value = segmentation as Record<string, unknown>
+  if (
+    typeof value.mask_png_base64 !== "string" ||
+    typeof value.width !== "number" ||
+    typeof value.height !== "number" ||
+    typeof value.positive_area_fraction !== "number" ||
+    typeof value.threshold !== "number"
+  ) {
+    return null
+  }
+  return {
+    maskPngBase64: value.mask_png_base64,
+    width: value.width,
+    height: value.height,
+    positiveAreaFraction: value.positive_area_fraction,
+    threshold: value.threshold,
   }
 }
 

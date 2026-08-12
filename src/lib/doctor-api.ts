@@ -1,7 +1,11 @@
 import { AnalysisStatus } from "@prisma/client"
 import { z } from "zod"
 
-import { buildDoctorCaseDetail, getDoctorCaseReportDrafts } from "@/lib/doctor-case-detail"
+import {
+  buildDoctorCaseDetail,
+  getDoctorCaseReportDrafts,
+  getStoredSegmentation,
+} from "@/lib/doctor-case-detail"
 import { db } from "@/lib/db"
 import { getDoctorCaseReviewErrorPayload } from "@/lib/doctor-case-review-errors"
 import { formatManualReviewSummary, getStoredOodDetection } from "@/lib/ood-detection"
@@ -598,6 +602,7 @@ function buildDoctorCaseDetailFromAnalysis(analysis: AnalysisRecord) {
     findings: analysis.findings,
     confidence: analysis.confidence,
     ood,
+    segmentation: getStoredSegmentation(analysis.result),
     updatedAt: analysis.updatedAt,
     review: analysis.review
       ? {

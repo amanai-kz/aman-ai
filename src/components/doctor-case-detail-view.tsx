@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { AlertTriangle, Search, ZoomIn, ZoomOut } from "lucide-react"
 
 import {
@@ -274,6 +275,28 @@ export function DoctorCaseDetailView({ detail }: { detail: DoctorCaseDetail }) {
                       </div>
                     </div>
                   </div>
+
+                  {detail.viewer.segmentation && (
+                    <div className="space-y-3 rounded-2xl border border-border bg-secondary/20 p-4">
+                      <div>
+                        <h3 className="text-sm font-medium">AI segmentation mask</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Assistive overlay for clinician review · threshold {detail.viewer.segmentation.threshold}
+                        </p>
+                      </div>
+                      <Image
+                        src={`data:image/png;base64,${detail.viewer.segmentation.maskPngBase64}`}
+                        alt="AI segmentation mask for clinician review"
+                        width={detail.viewer.segmentation.width}
+                        height={detail.viewer.segmentation.height}
+                        unoptimized
+                        className="rounded-lg border bg-black [image-rendering:pixelated]"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Segmented area: {(detail.viewer.segmentation.positiveAreaFraction * 100).toFixed(2)}% of the processed slice.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="grid gap-5 lg:grid-cols-3">
                     <div className="space-y-3">
