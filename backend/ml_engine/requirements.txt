@@ -9,6 +9,11 @@
 # numpy, scikit-learn come from backend/requirements.txt
 # (optional, improves NLG eval): bert-score>=0.3.13
 
+# --- ingestion.ehr / biosignal (SCRUM-65/68, MIMIC) ---
+# pandas comes from backend/requirements.txt
+# wfdb>=4.1                 # ingestion.ecg: read MIMIC-IV-ECG WFDB waveform files
+# scipy                     # ingestion.ecg: R-peak detection (bandpass + peak-picking)
+
 # --- model training (heavy; GPU hosts) ---
 # torch>=2.3
 # monai>=1.4
