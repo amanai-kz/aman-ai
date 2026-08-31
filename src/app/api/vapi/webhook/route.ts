@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { Pool } from "pg"
+import { getPgPool } from "@/lib/db-pg"
 import OpenAI from "openai"
 import { randomUUID } from "crypto"
 import {
@@ -11,10 +11,6 @@ import { PrivilegedApiError, toErrorResponse } from "@/lib/privileged-api"
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ""
 const VAPI_WEBHOOK_SECRET = process.env.VAPI_WEBHOOK_SECRET || ""
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-})
-
 // Groq client for report generation
 const groq = new OpenAI({
   apiKey: GROQ_API_KEY,
@@ -22,7 +18,7 @@ const groq = new OpenAI({
 })
 
 // System prompt for generating medical report from conversation
-const REPORT_SYSTEM_PROMPT = `Сен медициналық есеп жасаушы AI-сің. Пациентпен сөйлесу логынан ресми медициналық есеп жаса.
+const REPORT_SYSTEM_PROMPT = `Сен медициналық есеп жасаушы AI-сің. Пациентпен сөйлесу логынан ресми медициналық есеп жас[...]
 
 Есеп құрылымы:
 1. ЖАЛПЫ ЖАҒДАЙ / ОБЩЕЕ СОСТОЯНИЕ - краткое резюме
@@ -180,6 +176,8 @@ export async function POST(req: NextRequest) {
           (new Date(call.endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000
         )
       }
+      
+      const pool = getPgPool()
       
       // Extract patient info from metadata
       const patientId = await resolveVapiPatientId(
