@@ -35,11 +35,28 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     NODE_ENV: str | None = None
     
-    # CORS
+    # CORS - Environment-aware configuration
+    # Defaults: safe for local development
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "https://amanai.kz",
+    ]
+    # Whitelist methods to only those actually used by the API
+    # Prevents CORS from accidentally exposing unintended HTTP methods
+    CORS_METHODS: List[str] = [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "OPTIONS",
+    ]
+    # Whitelist headers to only those required for API communication
+    # Avoids overly permissive CORS that could leak sensitive metadata
+    CORS_HEADERS: List[str] = [
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "X-Requested-With",
     ]
     
     # Database
@@ -74,4 +91,3 @@ class Settings(BaseSettings):
 
 settings = Settings()
 validate_secret_key(settings.SECRET_KEY, production=settings.is_production)
-
