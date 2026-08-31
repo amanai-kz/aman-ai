@@ -2,12 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { buildPatientScopedReportWhere } from "@/lib/report-list-scope"
 import { PrivilegedApiError, toErrorResponse } from "@/lib/privileged-api"
-import { Pool } from "pg"
-
-// Direct PostgreSQL connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-})
+import { getPgPool } from "@/lib/db-pg"
 
 // POST - Save consultation report
 export async function POST(req: NextRequest) {
@@ -48,6 +43,8 @@ export async function POST(req: NextRequest) {
     
     // Speaker labels (JSON)
     const speakerLabelsJson = speakerLabels ? JSON.stringify(speakerLabels) : null
+
+    const pool = getPgPool()
 
     // Get patient ID if user is a patient
     let patientId = null
@@ -196,6 +193,7 @@ export async function GET() {
     
     query += ` ORDER BY created_at DESC`
     
+    const pool = getPgPool()
     const result = await pool.query(query, scope.params)
     
     return NextResponse.json({ reports: result.rows })

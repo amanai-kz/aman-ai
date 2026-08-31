@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { assertNullablePatientAccess } from "@/lib/authz"
 import { PrivilegedApiError, toErrorResponse } from "@/lib/privileged-api"
-import { Pool } from "pg"
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-})
+import { getPgPool } from "@/lib/db-pg"
 
 // POST - Submit feedback for a consultation report
 export async function POST(
@@ -28,6 +24,8 @@ export async function POST(
     if (!rating || rating < 1 || rating > 5) {
       return NextResponse.json({ error: "Rating must be between 1 and 5" }, { status: 400 })
     }
+
+    const pool = getPgPool()
 
     // Check the report exists and that the caller owns / is assigned to it
     // (otherwise any authenticated user could rate any patient's report).
@@ -94,6 +92,7 @@ export async function GET(
 
     const { id } = await params
 
+    const pool = getPgPool()
     const result = await pool.query(
       `SELECT
         patient_id as "patientId",

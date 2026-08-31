@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { assertNullablePatientAccess } from "@/lib/authz"
 import { PrivilegedApiError, toErrorResponse } from "@/lib/privileged-api"
-import { Pool } from "pg"
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-})
+import { getPgPool } from "@/lib/db-pg"
 
 // GET single consultation report
 export async function GET(
@@ -22,6 +18,7 @@ export async function GET(
 
     const { id } = await params
 
+    const pool = getPgPool()
     const result = await pool.query(
       `SELECT
         id,
@@ -78,6 +75,7 @@ export async function DELETE(
 
     // Load ownership before deleting — without this any authenticated user could
     // delete any patient's consultation report by id (IDOR).
+    const pool = getPgPool()
     const existing = await pool.query(
       `SELECT patient_id as "patientId" FROM consultation_reports WHERE id = $1`,
       [id]
