@@ -20,12 +20,6 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class RegisterRequest(BaseModel):
-    name: str
-    email: EmailStr
-    password: str
-
-
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -45,6 +39,8 @@ async def login(
     """
     Login with email and password.
     Returns JWT access token.
+    
+    Validates credentials against database and issues JWT token.
     """
     user = await load_auth_user_by_email(session, data.email)
     if not user or not user.password_hash:
@@ -71,19 +67,6 @@ def _issue_token(user: AuthUserRecord) -> str:
             "doctor_id": user.doctor_id,
             "assigned_patient_ids": user.assigned_patient_ids,
         },
-    )
-
-
-@router.post("/register", response_model=UserResponse)
-async def register(data: RegisterRequest):
-    """
-    Register new user.
-    """
-    # TODO: Implement actual registration with database
-    return UserResponse(
-        id="mock_id",
-        name=data.name,
-        email=data.email,
     )
 
 
