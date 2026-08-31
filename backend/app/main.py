@@ -34,13 +34,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware
+# CORS middleware - hardened with specific methods and headers
+# allow_credentials=False in production; plain-HTTP origins only in R&D profile (.env)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=settings.DEBUG,  # Only allow credentials in development
+    allow_methods=settings.CORS_METHODS,  # Whitelisted methods (not ["*"])
+    allow_headers=settings.CORS_HEADERS,  # Whitelisted headers (not ["*"])
 )
 
 # Include API router
