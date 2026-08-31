@@ -164,11 +164,11 @@ MARKER_ALIASES: Dict[str, List[str]] = {
     
     # Biochemistry
     "glucose": ["glucose", "glu", "глюкоза", "глюк.", "сахар крови", "қан қанты"],
-    "hba1c": ["hba1c", "a1c", "гликированный гемоглобин", "гликогемоглобин", "гликированный hb", "гликированный", "hba1c (гликированный"],
+    "hba1c": ["hba1c", "a1c", "гликированный гемоглобин", "гликогемоглобин", "гликированный hb", "гликированный", "hba1c (глик"],
     "insulin": ["insulin", "инсулин"],
     
     # Lipids
-    "cholesterol": ["cholesterol", "chol", "холестерин", "общий холестерин", "холестерол"],
+    "cholesterol": ["cholesterol", "chol", "холестерин", "общий холестерин", "холестерин общий", "холестерол"],
     "hdl": ["hdl", "hdl-c", "hdl cholesterol", "лпвп", "лпвп-холестерин", "хс-лпвп", "холестерин-лпвп"],
     "ldl": ["ldl", "ldl-c", "ldl cholesterol", "лпнп", "лпнп-холестерин", "хс-лпнп", "холестерин-лпнп", "хс лпнп"],
     "vldl": ["vldl", "лпонп", "холестерин не-лпвп", "не-лпвп"],
@@ -233,12 +233,12 @@ MARKER_ALIASES: Dict[str, List[str]] = {
     "progesterone": ["progesterone", "прогестерон"],
     "prolactin": ["prolactin", "пролактин"],
     
-    # Tumor markers
+    # Tumor markers - FIXED: added Cyrillic space-variants
     "psa": ["psa", "prostate specific antigen", "пса", "простатический специфический антиген"],
     "cea": ["cea", "carcinoembryonic antigen", "рэа", "раково-эмбриональный антиген"],
     "afp": ["afp", "alpha-fetoprotein", "афп", "альфа-фетопротеин"],
-    "ca125": ["ca-125", "ca125", "ca 125", "са-125", "са125"],
-    "ca199": ["ca-19-9", "ca19-9", "ca199", "ca 19-9", "са-19-9", "са19-9"],
+    "ca125": ["ca-125", "ca125", "ca 125", "са-125", "са125", "са 125"],
+    "ca199": ["ca-19-9", "ca19-9", "ca199", "ca 19-9", "са-19-9", "са19-9", "са 19-9"],
 }
 
 # Reference ranges (approximate, may vary by lab)
@@ -280,7 +280,8 @@ class BloodNLPExtractor:
             # Create pattern that matches any alias followed by value
             # Handles: "HbA1c (гликированный Hb) 5.6", "Хлор NA 105", "ЛПВП 1.08*"
             alias_pattern = "|".join(re.escape(a) for a in aliases)
-            # Pattern: alias, optional text in parens, optional NA marker, then number with optional asterisk
+            # Pattern: alias, optional text in parens, optional NA marker, optional adjective in parens,
+            # then number with optional asterisk
             pattern = re.compile(
                 rf"(?P<alias>{alias_pattern})(?:\s*\([^)]*\))?(?:\s*NA)?\s*[:\-]?\s*(?P<value>\d+(?:[.,]\d+)?)(?P<asterisk>\*)?(?:\s*(?P<unit>[a-zа-яёµ%\^\d\/\.\-]+))?",
                 flags=re.IGNORECASE
@@ -637,4 +638,3 @@ def extract_blood_analysis(text: str) -> Dict[str, Any]:
         "lab_name": extraction.lab_name,
         "analysis_date": extraction.analysis_date,
     }
-
