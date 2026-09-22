@@ -9,6 +9,7 @@ from app.api.endpoints import (
     auth,
     users,
     ct_mri,
+    mri_classification,
     iot,
     questionnaire,
     genetics,
@@ -26,6 +27,7 @@ api_router.include_router(users.router, prefix="/users", tags=["Users"])
 
 # AI Services
 api_router.include_router(ct_mri.router, prefix="/services/ct-mri", tags=["S1: CT/MRI Analysis"])
+api_router.include_router(mri_classification.router, prefix="/services/ct-mri", tags=["S1: CT/MRI Classification"])
 api_router.include_router(iot.router, prefix="/services/iot", tags=["S2: IoT Monitoring"])
 api_router.include_router(questionnaire.router, prefix="/services/questionnaire", tags=["S3: Questionnaire"])
 api_router.include_router(genetics.router, prefix="/services/genetics", tags=["S4: Genetics"])

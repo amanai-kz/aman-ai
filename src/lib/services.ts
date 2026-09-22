@@ -23,7 +23,7 @@ const serviceDefinitions: ServiceDefinition[] = [
     id: "mri-classification",
     iconName: "ScanLine",
     href: "/dashboard/mri-classification",
-    embedUrl: "https://classification.aman-ai.kz",
+    embedUrl: null,
     team: ["Murat"],
     status: "active",
     copy: {
